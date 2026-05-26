@@ -261,16 +261,12 @@ async function generateCombinedReadingFromApi(
   return { reading: parsed.reading, easternTeaser: parsed.easternTeaser };
 }
 
-// ── 언어 감지 ─────────────────────────────────────────────────────────────────
-
-function detectLanguage(text: string): string {
-  if (/[\uAC00-\uD7A3]/.test(text)) return "Korean";
-  if (/[\u3040-\u30FF\u31F0-\u31FF]/.test(text)) return "Japanese";
-  if (/[\u4E00-\u9FFF]/.test(text)) return "Chinese";
-  if (/[\u0600-\u06FF]/.test(text)) return "Arabic";
-  if (/[\u0400-\u04FF]/.test(text)) return "Russian";
-  return "English";
-}
+// ── Language (forced) ─────────────────────────────────────────────────────────
+/**
+ * 비용 최소 + 일관성 최대를 위해 리딩 출력 언어를 영어로 고정합니다.
+ * (언어 감지/번역/추가 호출 없음)
+ */
+const FORCED_READING_LANGUAGE = "English" as const;
 
 // ── 시스템 프롬프트 ───────────────────────────────────────────────────────────
 
@@ -411,9 +407,11 @@ export async function generateTarotReading(
       ({ reading, easternTeaser } = resolved.payload);
       source = resolved.source;
     } else {
-      const language = detectLanguage(session.intention);
+      const language = FORCED_READING_LANGUAGE;
 
       const userPrompt = `IMPORTANT: Write your ENTIRE response in ${language} only. Do not mix languages.
+ABSOLUTE: Do not output ANY non-English words or non-Latin scripts (e.g. Korean/Hangul, Japanese, Chinese, Cyrillic, Arabic). Not even a single character.
+If you accidentally include any non-English text, rewrite the entire response in English only before answering.
 
 User's concern: "${session.intention}"
 
@@ -505,7 +503,7 @@ export async function generateEasternTeaser(
       })
       .join("\n");
 
-    const language = detectLanguage(session.intention);
+    const language = FORCED_READING_LANGUAGE;
     const zodiacLine = session.zodiacSign
       ? `The seeker's zodiac sign is ${session.zodiacSign}. Weave it subtly into the preview.`
       : "No zodiac sign was provided — focus on yin-yang and the five elements only.";
@@ -637,7 +635,7 @@ export async function generatePremiumReading(
       })
       .join("\n\n---\n\n");
 
-    const language = detectLanguage(session.intention);
+    const language = FORCED_READING_LANGUAGE;
 
     const zodiacNote = session.zodiacSign
       ? `\nThe Sage may also reference the seeker's zodiac sign (${session.zodiacSign}) where it enriches the five-element reading.`
@@ -664,6 +662,8 @@ export async function generatePremiumReading(
       source = resolved.source;
     } else {
       const userPrompt = `IMPORTANT: Write your ENTIRE response in ${language} only.
+ABSOLUTE: Do not output ANY non-English words or non-Latin scripts (e.g. Korean/Hangul, Japanese, Chinese, Cyrillic, Arabic). Not even a single character.
+If you accidentally include any non-English text, rewrite the entire response in English only before answering.
 
 User's concern: "${session.intention}"
 
