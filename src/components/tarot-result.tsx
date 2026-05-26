@@ -211,16 +211,16 @@ function TimelineReadingCard ({
 
             <TimelineLogoPlaceholder logoIdPrefix={`timeline-flip-${index}`} />
 
-            {/* 이름·Major·키워드 — 전체 높이 고정으로 보더 라인 통일 */}
-            <div className='mt-1 flex h-[4.125rem] w-full shrink-0 flex-col items-center sm:h-[4.25rem]'>
+            {/* 이름·Major·키워드 — 모바일 2줄 뱃지까지 확보 후 보더 */}
+            <div className='mt-1 flex w-full shrink-0 flex-col items-center'>
               <h3
-                className='line-clamp-2 h-[1.875rem] shrink-0 text-center font-serif text-xs leading-snug sm:h-8 sm:text-sm'
+                className='line-clamp-2 max-h-[2.25rem] shrink-0 text-center font-serif text-xs leading-snug sm:max-h-8 sm:text-sm'
                 style={{ color: isMajor ? mysticTheme.gold : mysticTheme.offWhite }}
               >
                 {card.name}
               </h3>
 
-              <div className='-mt-0.5 flex h-2.5 w-full shrink-0 items-center justify-center'>
+              <div className='flex min-h-[0.625rem] w-full shrink-0 items-center justify-center'>
                 {isMajor && (
                   <span
                     className='rounded-full border px-1.5 py-px text-[7px] uppercase leading-none tracking-[0.15em] sm:text-[8px]'
@@ -231,7 +231,7 @@ function TimelineReadingCard ({
                 )}
               </div>
 
-              <div className='mt-0.5 flex h-6 w-full shrink-0 flex-wrap items-center justify-center gap-1 overflow-hidden px-0.5'>
+              <div className='mt-1 flex min-h-[2.75rem] w-full shrink-0 flex-wrap content-center justify-center gap-x-1 gap-y-1 px-0.5 pb-1 sm:min-h-6'>
                 {card.keywords.slice(0, 3).map(kw => (
                   <span
                     key={kw}
@@ -249,15 +249,9 @@ function TimelineReadingCard ({
             </div>
 
             <div
-              className='mt-2 flex min-h-0 w-full flex-1 flex-col overflow-hidden border-t pt-2'
+              className='mt-1 flex min-h-0 w-full flex-1 flex-col overflow-hidden border-t pt-2 sm:mt-2'
               style={{ borderColor: 'rgba(255,255,255,0.08)' }}
             >
-              <p
-                className='mb-1 shrink-0 text-center text-[8px] uppercase tracking-[0.22em] sm:text-[9px]'
-                style={{ color: mysticTheme.offWhiteMuted }}
-              >
-                Your reader
-              </p>
               <div className='min-h-0 flex-1 overflow-y-auto overscroll-contain'>
                 <motion.p
                   initial={false}
