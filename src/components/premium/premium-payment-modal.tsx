@@ -144,9 +144,13 @@ function CheckoutForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-4">
+    <form
+      onSubmit={handleSubmit}
+      className="flex min-h-0 w-full flex-1 flex-col gap-4 max-md:min-h-0"
+    >
+      {/* 모바일: 박스 안에서만 스크롤 / 웹: Payment Element 기본 높이 */}
       <div
-        className="w-full max-h-[280px] overflow-y-auto overscroll-contain rounded-lg sm:max-h-none sm:overflow-visible"
+        className="min-h-0 w-full max-md:flex-1 max-md:overflow-y-auto max-md:overscroll-contain sm:overflow-visible"
         style={{
           WebkitOverflowScrolling: "touch",
           touchAction: "pan-y",
@@ -160,7 +164,7 @@ function CheckoutForm({
           {error}
         </p>
       )}
-      <div className="flex gap-2 sm:gap-3">
+      <div className="flex shrink-0 gap-2 sm:gap-3">
         <button
           type="button"
           onClick={onClose}
@@ -218,9 +222,11 @@ function PaymentElementsWrapper({
   };
 
   return (
-    <Elements stripe={stripePromise} options={elementsOptions}>
-      <CheckoutForm sessionId={sessionId} onSuccess={onSuccess} onClose={onClose} />
-    </Elements>
+    <div className="flex min-h-0 flex-1 flex-col max-md:min-h-0">
+      <Elements stripe={stripePromise} options={elementsOptions}>
+        <CheckoutForm sessionId={sessionId} onSuccess={onSuccess} onClose={onClose} />
+      </Elements>
+    </div>
   );
 }
 
@@ -243,7 +249,7 @@ export function PremiumPaymentModal({
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-300 flex items-end justify-center overflow-y-auto overscroll-contain px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] sm:items-center sm:px-4 sm:py-8"
+          className="fixed inset-0 z-300 flex max-md:items-end max-md:overflow-hidden sm:items-center sm:justify-center sm:overflow-y-auto sm:overscroll-contain sm:px-4 sm:py-8"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -258,34 +264,37 @@ export function PremiumPaymentModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.28, ease: cinematicEase }}
-            className="relative z-10 my-auto w-full max-w-md max-h-[min(92dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1.5rem))] overflow-y-auto overscroll-contain rounded-2xl p-4 sm:max-h-[min(90dvh,40rem)] sm:p-6"
+            className="relative z-10 flex w-full max-w-md flex-col overflow-hidden max-md:max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] max-md:rounded-t-2xl max-md:border-x-0 max-md:border-b-0 max-md:px-4 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] max-md:pt-4 sm:my-auto sm:max-h-none sm:overflow-visible sm:rounded-2xl sm:p-6"
             style={{
               background: easternTheme.parchment,
               border: `1px solid ${easternTheme.goldDim}`,
               boxShadow: `0 0 60px ${easternTheme.goldGlow}, 0 24px 48px rgba(0,0,0,0.55)`,
               backdropFilter: "blur(20px)",
-              WebkitOverflowScrolling: "touch",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3
-              className="mb-0.5 text-center font-serif text-base sm:text-lg"
-              style={{ color: easternTheme.gold }}
-            >
-              Eastern Wisdom
-            </h3>
-            <p
-              className="mb-4 text-center text-[11px] tracking-wide sm:mb-5 sm:text-xs"
-              style={{ color: easternTheme.offWhiteMuted }}
-            >
-              Unlock the scroll · $0.99
-            </p>
-            <PaymentElementsWrapper
-              clientSecret={clientSecret}
-              sessionId={sessionId}
-              onClose={onClose}
-              onSuccess={onSuccess}
-            />
+            <header className="shrink-0">
+              <h3
+                className="mb-0.5 text-center font-serif text-base sm:text-lg"
+                style={{ color: easternTheme.gold }}
+              >
+                Eastern Wisdom
+              </h3>
+              <p
+                className="mb-4 text-center text-[11px] tracking-wide sm:mb-5 sm:text-xs"
+                style={{ color: easternTheme.offWhiteMuted }}
+              >
+                Unlock the scroll · $0.99
+              </p>
+            </header>
+            <div className="flex min-h-0 flex-1 flex-col max-md:min-h-0 sm:flex-none">
+              <PaymentElementsWrapper
+                clientSecret={clientSecret}
+                sessionId={sessionId}
+                onClose={onClose}
+                onSuccess={onSuccess}
+              />
+            </div>
           </motion.div>
         </motion.div>
       )}
