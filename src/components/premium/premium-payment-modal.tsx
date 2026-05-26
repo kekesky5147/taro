@@ -32,13 +32,21 @@ const paymentElementOptions: StripePaymentElementOptions = {
   layout: "tabs",
   fields: {
     billingDetails: {
+      /** 영수증용 이메일 — Element에서 수집 */
       email: "auto",
+      /** UI에 이름 필드 숨김 → confirm 시 아래 값 전달 */
       name: "never",
-      phone: "never",
-      address: "never",
+      /** 카드 결제에 불필요한 주소 폼 최소화 (필요 시만 표시) */
+      address: "if_required",
+      /** phone: never 사용 시 Link/confirm 오류 → 기본(auto) 사용 */
     },
   },
 };
+
+/** fields에서 never인 billing 항목 — confirmPayment에 반드시 전달 */
+const confirmBillingDetails = {
+  name: "Mystic Synchronicity",
+} as const;
 
 const stripePromise =
   typeof window !== "undefined" &&
@@ -88,10 +96,7 @@ function CheckoutForm({
         redirect: "if_required",
         confirmParams: {
           payment_method_data: {
-            billing_details: {
-              /** name: never 일 때 Stripe가 confirm 시 name 요구 */
-              name: "Mystic Synchronicity",
-            },
+            billing_details: confirmBillingDetails,
           },
         },
       });
