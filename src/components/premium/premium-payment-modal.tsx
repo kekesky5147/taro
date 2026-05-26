@@ -3,56 +3,24 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { loadStripe } from "@stripe/stripe-js";
-import type { Appearance, StripeElementsOptions } from "@stripe/stripe-js";
+import type { StripeElementsOptions } from "@stripe/stripe-js";
 import {
   Elements,
   PaymentElement,
   useElements,
   useStripe,
 } from "@stripe/react-stripe-js";
-import type { StripePaymentElementOptions } from "@stripe/stripe-js";
 import { generatePremiumReading } from "@/actions/ai";
 import { unlockPremium } from "@/actions/premium";
 import { cinematicEase, easternTheme } from "./premium-eastern-theme";
 
 type CheckoutPhase = "idle" | "paying" | "generating";
 
-/** Stripe 기본 appearance (슬림 커스텀 제거) */
-const stripeAppearance: Appearance = {
-  theme: "night",
-  variables: {
-    colorPrimary: easternTheme.gold,
-    colorBackground: easternTheme.ink,
-    colorText: easternTheme.offWhite,
-    borderRadius: "12px",
-  },
-};
-
-const paymentElementOptions: StripePaymentElementOptions = {
-  layout: "tabs",
-  fields: {
-    billingDetails: {
-      /** 영수증용 이메일 — Element에서 수집 */
-      email: "auto",
-      /** UI에 이름 필드 숨김 → confirm 시 아래 값 전달 */
-      name: "never",
-      /** 카드 결제에 불필요한 주소 폼 최소화 (필요 시만 표시) */
-      address: "if_required",
-      /** phone: never 사용 시 Link/confirm 오류 → 기본(auto) 사용 */
-    },
-  },
-};
-
-/** fields에서 never인 billing 항목 — confirmPayment에 반드시 전달 */
-const confirmBillingDetails = {
-  name: "Mystic Synchronicity",
-} as const;
-
 const stripePromise =
   typeof window !== "undefined" &&
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY &&
   !process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.includes("your_key_here")
-    ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY, { locale: "en" })
+    ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
     : null;
 
 function CheckoutForm({
@@ -94,11 +62,6 @@ function CheckoutForm({
       const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
         elements,
         redirect: "if_required",
-        confirmParams: {
-          payment_method_data: {
-            billing_details: confirmBillingDetails,
-          },
-        },
       });
 
       if (confirmError) {
@@ -149,31 +112,18 @@ function CheckoutForm({
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="flex min-h-0 w-full flex-1 flex-col gap-4 max-md:min-h-0"
-    >
-      {/* 모바일: 박스 안에서만 스크롤 / 웹: Payment Element 기본 높이 */}
-      <div
-        className="min-h-0 w-full max-md:flex-1 max-md:overflow-y-auto max-md:overscroll-contain sm:overflow-visible"
-        style={{
-          WebkitOverflowScrolling: "touch",
-          touchAction: "pan-y",
-        }}
-        aria-label="Payment form"
-      >
-        <PaymentElement options={paymentElementOptions} />
-      </div>
+    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-4">
+      <PaymentElement options={{ layout: "tabs" }} />
       {error && (
         <p className="text-center text-xs" style={{ color: "oklch(0.65 0.12 25 / 0.9)" }}>
           {error}
         </p>
       )}
-      <div className="flex shrink-0 gap-2 sm:gap-3">
+      <div className="flex gap-3">
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 rounded-full border px-3 py-2 text-xs tracking-wide sm:px-4 sm:py-2.5"
+          className="flex-1 rounded-full border px-4 py-2.5 text-xs tracking-wide"
           style={{
             borderColor: easternTheme.goldDim,
             color: easternTheme.offWhiteMuted,
@@ -185,7 +135,7 @@ function CheckoutForm({
         <button
           type="submit"
           disabled={!stripe || isBusy}
-          className="flex-1 rounded-full px-3 py-2 text-xs font-medium tracking-wide disabled:opacity-50 sm:px-4 sm:py-2.5"
+          className="flex-1 rounded-full px-4 py-2.5 text-xs font-medium tracking-wide disabled:opacity-50"
           style={{
             background: `linear-gradient(135deg, oklch(0.55 0.12 70), oklch(0.45 0.1 55))`,
             color: easternTheme.offWhite,
@@ -221,17 +171,21 @@ function PaymentElementsWrapper({
 
   const elementsOptions: StripeElementsOptions = {
     clientSecret,
-    appearance: stripeAppearance,
-    /** 브라우저가 ko여도 결제 UI는 앱과 같이 영어로 */
-    locale: "en",
+    appearance: {
+      theme: "night",
+      variables: {
+        colorPrimary: easternTheme.gold,
+        colorBackground: easternTheme.ink,
+        colorText: easternTheme.offWhite,
+        borderRadius: "12px",
+      },
+    },
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col max-md:min-h-0">
-      <Elements stripe={stripePromise} options={elementsOptions}>
-        <CheckoutForm sessionId={sessionId} onSuccess={onSuccess} onClose={onClose} />
-      </Elements>
-    </div>
+    <Elements stripe={stripePromise} options={elementsOptions}>
+      <CheckoutForm sessionId={sessionId} onSuccess={onSuccess} onClose={onClose} />
+    </Elements>
   );
 }
 
@@ -254,7 +208,7 @@ export function PremiumPaymentModal({
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-300 flex max-md:items-end max-md:overflow-hidden sm:items-center sm:justify-center sm:overflow-y-auto sm:overscroll-contain sm:px-4 sm:py-8"
+          className="fixed inset-0 z-300 flex items-center justify-center px-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -269,37 +223,36 @@ export function PremiumPaymentModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.28, ease: cinematicEase }}
-            className="relative z-10 flex w-full max-w-md flex-col overflow-hidden max-md:max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] max-md:rounded-t-2xl max-md:border-x-0 max-md:border-b-0 max-md:px-4 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] max-md:pt-4 sm:my-auto sm:max-h-none sm:overflow-visible sm:rounded-2xl sm:p-6"
+            className="relative z-10 w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl p-6 sm:p-8"
             style={{
               background: easternTheme.parchment,
               border: `1px solid ${easternTheme.goldDim}`,
               boxShadow: `0 0 60px ${easternTheme.goldGlow}, 0 24px 48px rgba(0,0,0,0.55)`,
               backdropFilter: "blur(20px)",
+              WebkitOverflowScrolling: "touch",
+              maxHeight:
+                "min(92dvh, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1.5rem))",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <header className="shrink-0">
-              <h3
-                className="mb-0.5 text-center font-serif text-base sm:text-lg"
-                style={{ color: easternTheme.gold }}
-              >
-                Eastern Wisdom
-              </h3>
-              <p
-                className="mb-4 text-center text-[11px] tracking-wide sm:mb-5 sm:text-xs"
-                style={{ color: easternTheme.offWhiteMuted }}
-              >
-                Unlock the scroll · $0.99
-              </p>
-            </header>
-            <div className="flex min-h-0 flex-1 flex-col max-md:min-h-0 sm:flex-none">
-              <PaymentElementsWrapper
-                clientSecret={clientSecret}
-                sessionId={sessionId}
-                onClose={onClose}
-                onSuccess={onSuccess}
-              />
-            </div>
+            <h3
+              className="mb-1 text-center font-serif text-lg"
+              style={{ color: easternTheme.gold }}
+            >
+              Eastern Wisdom
+            </h3>
+            <p
+              className="mb-6 text-center text-xs tracking-wide"
+              style={{ color: easternTheme.offWhiteMuted }}
+            >
+              Unlock the scroll · $0.99
+            </p>
+            <PaymentElementsWrapper
+              clientSecret={clientSecret}
+              sessionId={sessionId}
+              onClose={onClose}
+              onSuccess={onSuccess}
+            />
           </motion.div>
         </motion.div>
       )}
