@@ -29,6 +29,14 @@ const MOCK_PREMIUM_FILE = path.join(DATA_DIR, "mock-premium-reading.json");
 
 const PREMIUM_CACHE_PREFIX = "premium:";
 
+/** Vercel 등 서버리스는 디스크 쓰기 불가(EROFS) — 로컬 개발에서만 cache.json 사용 */
+function canPersistFileCache(): boolean {
+  if (process.env.VERCEL === "1" || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return false;
+  }
+  return process.env.NODE_ENV === "development";
+}
+
 function isPremiumCacheKey(key: string): boolean {
   return key.startsWith(PREMIUM_CACHE_PREFIX);
 }
@@ -55,6 +63,10 @@ let fileCache: Record<string, CachedReadingPayload> = {};
 
 async function ensureFileCacheLoaded(): Promise<void> {
   if (fileCacheLoaded) return;
+  if (!canPersistFileCache()) {
+    fileCacheLoaded = true;
+    return;
+  }
   try {
     const raw = await readFile(CACHE_FILE, "utf8");
     fileCache = JSON.parse(raw) as Record<string, CachedReadingPayload>;
@@ -75,9 +87,9 @@ async function ensureFileCacheLoaded(): Promise<void> {
   if (pruned > 0) {
     await mkdir(DATA_DIR, { recursive: true });
     await writeFile(CACHE_FILE, JSON.stringify(fileCache, null, 2), "utf8");
-    if (process.env.NODE_ENV === "development") {
-      console.info(`[reading-cache] pruned ${pruned} incomplete entr${pruned === 1 ? "y" : "ies"}`);
-    }
+    console.info(
+      `[reading-cache] pruned ${pruned} incomplete entr${pruned === 1 ? "y" : "ies"}`,
+    );
   }
 
   fileCacheLoaded = true;
@@ -90,19 +102,35 @@ export async function getCachedReading(
   const mem = memoryCache.get(key);
   if (mem) return mem;
 
-  await ensureFileCacheLoaded();
-  const hit = fileCache[key];
-  if (!hit?.reading) return null;
+  if (canPersistFileCache()) {
+    await ensureFileCacheLoaded();
+    const hit = fileCache[key];
+    if (!hit?.reading) return null;
 
-  if (!isPremiumCacheKey(key) && !isValidStandardPayload(hit)) {
-    delete fileCache[key];
-    memoryCache.delete(key);
-    await writeFile(CACHE_FILE, JSON.stringify(fileCache, null, 2), "utf8");
-    return null;
+    if (!isPremiumCacheKey(key) && !isValidStandardPayload(hit)) {
+      delete fileCache[key];
+      memoryCache.delete(key);
+      await writeFile(CACHE_FILE, JSON.stringify(fileCache, null, 2), "utf8");
+      return null;
+    }
+
+    memoryCache.set(key, hit);
+    return hit;
   }
 
-  memoryCache.set(key, hit);
-  return hit;
+  return null;
+}
+
+async function persistFileCacheEntry(
+  key: string,
+  payload: CachedReadingPayload,
+): Promise<void> {
+  if (!canPersistFileCache()) return;
+
+  await ensureFileCacheLoaded();
+  fileCache[key] = payload;
+  await mkdir(DATA_DIR, { recursive: true });
+  await writeFile(CACHE_FILE, JSON.stringify(fileCache, null, 2), "utf8");
 }
 
 export async function setCachedReading(
@@ -117,11 +145,7 @@ export async function setCachedReading(
   }
 
   memoryCache.set(key, payload);
-  await ensureFileCacheLoaded();
-  fileCache[key] = payload;
-
-  await mkdir(DATA_DIR, { recursive: true });
-  await writeFile(CACHE_FILE, JSON.stringify(fileCache, null, 2), "utf8");
+  await persistFileCacheEntry(key, payload);
 }
 
 /** 1순위: 개발 환경 mock (READING_USE_LIVE_API=true 이면 스킵) */
