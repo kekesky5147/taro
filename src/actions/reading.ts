@@ -26,12 +26,12 @@ const cardInputSchema = z.object({
 const submitReadingSchema = z.object({
   intention: z
     .string()
-    .min(2, "질문을 2자 이상 입력해 주세요.")
-    .max(1000, "질문은 1000자 이하로 입력해 주세요.")
+    .min(2, "Please enter at least 2 characters.")
+    .max(1000, "Your question must be 1000 characters or fewer.")
     .trim(),
   cards: z
     .array(cardInputSchema)
-    .length(3, "카드 3장을 모두 선택해 주세요."),
+    .length(3, "Please select all 3 cards."),
   zodiacSign: z.string().max(30).optional(),
 });
 
@@ -54,7 +54,7 @@ export async function submitReading(
   if (!parsed.success) {
     return {
       success: false,
-      error: parsed.error.issues[0]?.message ?? "입력값이 올바르지 않습니다.",
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
     };
   }
 
@@ -75,7 +75,7 @@ export async function submitReading(
     if (missingSlug) {
       return {
         success: false,
-        error: `카드 데이터를 찾을 수 없습니다 (slug: ${missingSlug}). DB 시드가 완료되었는지 확인해 주세요.`,
+        error: `Card data not found (slug: ${missingSlug}). Please ensure the database seed has been run.`,
       };
     }
 
@@ -90,7 +90,7 @@ export async function submitReading(
       .returning({ id: readingSessions.id });
 
     if (!session) {
-      throw new Error("세션 생성에 실패했습니다.");
+      throw new Error("Failed to create session.");
     }
 
     // 4. session_cards 일괄 삽입
@@ -135,7 +135,7 @@ export async function submitReading(
     console.error("[submitReading] Error:", err);
     return {
       success: false,
-      error: "리딩을 생성하는 중 오류가 발생했습니다. 다시 시도해 주세요.",
+      error: "An error occurred while generating your reading. Please try again.",
     };
   }
 }

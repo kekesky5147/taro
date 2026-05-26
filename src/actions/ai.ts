@@ -198,7 +198,7 @@ async function generateCombinedReadingFromApi(
 
   const parsed = parseCombinedReading(raw);
   if (!parsed.reading) {
-    throw new Error("Gemini 리딩 본문이 비어 있습니다.");
+    throw new Error("Gemini returned an empty reading.");
   }
   return { reading: parsed.reading, easternTeaser: parsed.easternTeaser };
 }
@@ -239,7 +239,7 @@ const SYSTEM_PROMPT = `You are a professional tarot reader giving a standard thr
 // ── 입력값 검증 스키마 ────────────────────────────────────────────────────────
 
 const generateReadingSchema = z.object({
-  sessionId: z.string().uuid("유효하지 않은 세션 ID입니다."),
+  sessionId: z.string().uuid("Invalid session ID."),
 });
 
 // ── 메인 액션 ─────────────────────────────────────────────────────────────────
@@ -258,7 +258,7 @@ export async function generateTarotReading(
   if (!parsed.success) {
     return {
       success: false,
-      error: parsed.error.issues[0]?.message ?? "입력값이 올바르지 않습니다.",
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
     };
   }
 
@@ -270,7 +270,7 @@ export async function generateTarotReading(
     });
 
     if (!session) {
-      return { success: false, error: "세션을 찾을 수 없습니다." };
+      return { success: false, error: "Session not found." };
     }
 
     // 3. 이미 생성된 완전한 리딩이 있으면 DB 캐시 반환 (API 호출 없음)
@@ -293,7 +293,7 @@ export async function generateTarotReading(
     if (session.cards.length < 3) {
       return {
         success: false,
-        error: `카드가 ${session.cards.length}장만 선택되었습니다. 3장을 모두 선택해 주세요.`,
+        error: `Only ${session.cards.length} card(s) selected. Please select all 3 cards.`,
       };
     }
 
@@ -309,7 +309,7 @@ export async function generateTarotReading(
       .sort((a, b) => a.position - b.position)
       .map((sc) => {
         const detail = cardDetails.find((c) => c.id === sc.cardId);
-        if (!detail) throw new Error(`카드 ID ${sc.cardId} 정보를 찾을 수 없습니다.`);
+        if (!detail) throw new Error(`Card not found for ID ${sc.cardId}.`);
         return { ...sc, detail };
       });
 
@@ -687,7 +687,7 @@ export async function getReadingStatus(
 ): Promise<ActionResult<{ status: string; reading: string | null }>> {
   const parsed = generateReadingSchema.safeParse({ sessionId });
   if (!parsed.success) {
-    return { success: false, error: "유효하지 않은 세션 ID입니다." };
+    return { success: false, error: "Invalid session ID." };
   }
 
   try {
@@ -701,7 +701,7 @@ export async function getReadingStatus(
       .limit(1);
 
     if (!session[0]) {
-      return { success: false, error: "세션을 찾을 수 없습니다." };
+      return { success: false, error: "Session not found." };
     }
 
     return {
@@ -713,6 +713,6 @@ export async function getReadingStatus(
     };
   } catch (err) {
     console.error("[getReadingStatus] Error:", err);
-    return { success: false, error: "상태 조회 중 오류가 발생했습니다." };
+    return { success: false, error: "Failed to load reading status. Please try again." };
   }
 }

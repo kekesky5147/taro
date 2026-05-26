@@ -614,8 +614,12 @@ function TarotInfiniteWheelBase({
         </div>
       </div>
 
+      <p className="pointer-events-none -mt-1 text-center text-[10px] leading-relaxed tracking-wide text-white/35 sm:text-[11px]">
+        Swipe left or right to browse the cards
+      </p>
+
       {/* ── Pick Card 버튼 — 중앙 정렬 완료 시 활성화 ── */}
-      <div className="flex flex-col items-center gap-1.5 pb-1 pt-3">
+      <div className="flex flex-col items-center gap-1.5 pb-1 pt-2">
         <button
           type="button"
           disabled={!isSettled || disabled}
@@ -667,9 +671,6 @@ function TarotInfiniteWheelBase({
             />
           )}
         </button>
-        <p className="text-[9px] font-medium uppercase tracking-[0.22em] text-white/25">
-          Swipe to explore
-        </p>
       </div>
     </>
   );

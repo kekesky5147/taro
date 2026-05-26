@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { mysticEase, mysticTheme } from "./mystic-theme";
 
 const SAGE_INVITE_COPY =
-  "당신의 운명에 호기심을 보이는 동양 철학자가 있네요. 그를 불러 함께 이야기를 들어보시겠습니까? 그와 함께라면 저도 더 깊이 있는 탐구를 할 수 있을 것 같습니다.";
+  "An Eastern philosopher has taken an interest in your path. Would you invite them to speak with you? With their counsel, I could explore your reading more deeply.";
 
 type CrossroadsChoiceProps = {
   zodiacSign?: string | null;

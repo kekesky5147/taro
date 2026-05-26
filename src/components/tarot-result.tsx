@@ -86,8 +86,8 @@ function TimelineReadingCard ({
         onClick={() => onFlip(index)}
         aria-label={
           isFlipped
-            ? `${label} — ${card.name} 앞면 보기`
-            : `${label} — ${card.name} 뒤집기`
+            ? `${label} — show front of ${card.name}`
+            : `${label} — flip ${card.name}`
         }
         className='block h-full w-full cursor-pointer rounded-2xl text-left focus-visible:outline-2 focus-visible:outline-offset-2'
         style={{ perspective: 1100, outlineColor: mysticTheme.goldDim }}

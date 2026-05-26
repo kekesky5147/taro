@@ -11,7 +11,7 @@ import postgres from "postgres";
 import * as schema from "@/db";
 
 if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL 환경 변수가 설정되지 않았습니다.");
+  throw new Error("DATABASE_URL environment variable is not set.");
 }
 
 /**

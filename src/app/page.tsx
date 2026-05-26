@@ -169,9 +169,9 @@ export default function Home() {
       } else {
         const raw = result.error ?? "";
         const isQuota =
-          raw.includes("사용량이 초과") ||
           raw.includes("429") ||
-          raw.toLowerCase().includes("quota");
+          raw.toLowerCase().includes("quota") ||
+          raw.toLowerCase().includes("too many requests");
         setErrorMsg(
           isQuota
             ? "There are too many requests right now. Please try again in a moment."
