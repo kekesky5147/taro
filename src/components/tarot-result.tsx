@@ -74,6 +74,25 @@ function TimelineReadingCard ({
     setImgFailed(false)
   }, [imageSrc])
 
+  const useRemoteImg = imageSrc.startsWith('http')
+
+  /** iOS Safari: backfaceVisibility만으로는 앞면이 거울상으로 비침 → visibility로 강제 전환 */
+  const frontFaceStyle = {
+    ...boxStyle,
+    backfaceVisibility: 'hidden' as const,
+    WebkitBackfaceVisibility: 'hidden' as const,
+    transform: 'rotateY(0deg) translateZ(2px)',
+    visibility: isFlipped ? ('hidden' as const) : ('visible' as const)
+  }
+
+  const backFaceStyle = {
+    ...boxStyle,
+    backfaceVisibility: 'hidden' as const,
+    WebkitBackfaceVisibility: 'hidden' as const,
+    transform: 'rotateY(180deg) translateZ(2px)',
+    visibility: isFlipped ? ('visible' as const) : ('hidden' as const)
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -90,12 +109,17 @@ function TimelineReadingCard ({
             : `${label} — flip ${card.name}`
         }
         className='block h-full w-full cursor-pointer rounded-2xl text-left focus-visible:outline-2 focus-visible:outline-offset-2'
-        style={{ perspective: 1100, outlineColor: mysticTheme.goldDim }}
+        style={{
+          perspective: 1100,
+          outlineColor: mysticTheme.goldDim,
+          WebkitPerspective: 1100
+        }}
       >
         <motion.div
-          className='relative w-full [contain:layout_paint]'
+          className='relative w-full'
           style={{
             transformStyle: 'preserve-3d',
+            WebkitTransformStyle: 'preserve-3d',
             minHeight: TIMELINE_SLOT_MIN_H
           }}
           animate={{ rotateY: isFlipped ? 180 : 0 }}
@@ -104,12 +128,8 @@ function TimelineReadingCard ({
           {/* 앞면 — 타임라인 박스 전체에 아트워크 */}
           <div
             className='absolute inset-0 flex flex-col overflow-hidden rounded-2xl border'
-            style={{
-              ...boxStyle,
-              backfaceVisibility: 'hidden',
-              WebkitBackfaceVisibility: 'hidden',
-              transform: 'rotateY(0deg)'
-            }}
+            style={frontFaceStyle}
+            aria-hidden={isFlipped}
           >
             <span
               className='relative z-10 px-2 pb-1 pt-3 text-center text-[8px] font-medium uppercase tracking-[0.32em] sm:text-[9px] sm:tracking-[0.38em]'
@@ -122,15 +142,26 @@ function TimelineReadingCard ({
             </span>
             <div className='relative min-h-0 flex-1'>
               {!imgFailed ? (
-                <Image
-                  src={imageSrc}
-                  alt={card.name}
-                  fill
-                  sizes='(max-width: 640px) 30vw, 200px'
-                  className='object-cover object-center'
-                  onError={() => setImgFailed(true)}
-                  unoptimized={imageSrc.startsWith('http')}
-                />
+                useRemoteImg ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={imageSrc}
+                    alt={card.name}
+                    className='absolute inset-0 h-full w-full object-cover object-center'
+                    onError={() => setImgFailed(true)}
+                    loading='eager'
+                    decoding='async'
+                  />
+                ) : (
+                  <Image
+                    src={imageSrc}
+                    alt={card.name}
+                    fill
+                    sizes='(max-width: 640px) 30vw, 200px'
+                    className='object-cover object-center'
+                    onError={() => setImgFailed(true)}
+                  />
+                )
               ) : (
                 <div
                   className='flex h-full w-full items-center justify-center px-3'
@@ -168,12 +199,8 @@ function TimelineReadingCard ({
           {/* 뒷면 — 상단 고정 / 보더 아래 리딩만 스크롤 */}
           <div
             className='absolute inset-0 flex flex-col items-center overflow-hidden rounded-2xl border px-2 py-3 sm:px-3 sm:py-4'
-            style={{
-              ...boxStyle,
-              backfaceVisibility: 'hidden',
-              WebkitBackfaceVisibility: 'hidden',
-              transform: 'rotateY(180deg)'
-            }}
+            style={backFaceStyle}
+            aria-hidden={!isFlipped}
           >
             <span
               className='mb-2 shrink-0 text-[8px] font-medium uppercase tracking-[0.32em] sm:text-[9px] sm:tracking-[0.38em]'
