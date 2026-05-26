@@ -42,6 +42,9 @@ export const viewport: Viewport = {
   viewportFit: 'cover'
 }
 
+/** Groq 프리미엄 생성 등 Server Action 상한 (Vercel 기본 10s 초과 방지) */
+export const maxDuration = 60
+
 export default function RootLayout ({
   children
 }: Readonly<{

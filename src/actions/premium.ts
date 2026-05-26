@@ -178,12 +178,15 @@ export async function createPaymentIntent(
 }
 
 /**
- * 결제 검증 후 프리미엄 해석 생성 및 DB 업데이트
+ * Stripe 결제만 검증·기록 (Groq 생성은 클라이언트에서 generatePremiumReading 호출)
+ * — Server Action 타임아웃·Processing 멈춤 방지
  */
 export async function unlockPremium(
   sessionId: string,
   paymentIntentId: string,
-): Promise<ActionResult<{ premiumReading: string; isPremium: true }>> {
+): Promise<
+  ActionResult<{ premiumReading: string | null; isPremium: boolean }>
+> {
   const parsed = unlockSchema.safeParse({ sessionId, paymentIntentId });
   if (!parsed.success) {
     return {
@@ -228,25 +231,34 @@ export async function unlockPremium(
       };
     }
 
-    const aiResult = await generatePremiumReading(sessionId);
-    if (!aiResult.success) {
-      return { success: false, error: aiResult.error };
-    }
-
     await db
       .update(readingSessions)
       .set({
-        isPremium: true,
         stripePaymentIntentId: paymentIntentId,
         updatedAt: new Date(),
       })
       .where(eq(readingSessions.id, sessionId));
 
+    if (session.premiumReading) {
+      await db
+        .update(readingSessions)
+        .set({ isPremium: true, updatedAt: new Date() })
+        .where(eq(readingSessions.id, sessionId));
+
+      return {
+        success: true,
+        data: {
+          premiumReading: session.premiumReading,
+          isPremium: true,
+        },
+      };
+    }
+
     return {
       success: true,
       data: {
-        premiumReading: aiResult.data.premiumReading,
-        isPremium: true,
+        premiumReading: null,
+        isPremium: false,
       },
     };
   } catch (err) {

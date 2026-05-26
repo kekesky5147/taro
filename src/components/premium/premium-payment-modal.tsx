@@ -11,7 +11,10 @@ import {
   useStripe,
 } from "@stripe/react-stripe-js";
 import type { StripePaymentElementOptions } from "@stripe/stripe-js";
+import { generatePremiumReading } from "@/actions/ai";
 import { unlockPremium } from "@/actions/premium";
+
+type CheckoutPhase = "idle" | "paying" | "generating";
 import { cinematicEase, easternTheme } from "./premium-eastern-theme";
 
 /** 모바일 키보드 대응 — 컴팩트 Payment Element (이메일·영수증 필드 유지) */
@@ -81,7 +84,7 @@ const stripePromise =
   typeof window !== "undefined" &&
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY &&
   !process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.includes("your_key_here")
-    ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+    ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY, { locale: "en" })
     : null;
 
 function CheckoutForm({
@@ -96,41 +99,80 @@ function CheckoutForm({
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
-  const [processing, setProcessing] = useState(false);
+  const [phase, setPhase] = useState<CheckoutPhase>("idle");
+
+  const isBusy = phase !== "idle";
+  const payLabel =
+    phase === "paying"
+      ? "Confirming payment..."
+      : phase === "generating"
+        ? "Generating reading..."
+        : "Pay $0.99";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || isBusy) return;
 
-    setProcessing(true);
+    setPhase("paying");
     setError(null);
 
-    const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      redirect: "if_required",
-    });
+    try {
+      const { error: submitError } = await elements.submit();
+      if (submitError) {
+        setError(submitError.message ?? "Please check your payment details.");
+        return;
+      }
 
-    if (confirmError) {
-      setError(confirmError.message ?? "Payment failed.");
-      setProcessing(false);
-      return;
+      const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        redirect: "if_required",
+      });
+
+      if (confirmError) {
+        setError(confirmError.message ?? "Payment failed.");
+        return;
+      }
+
+      if (!paymentIntent) {
+        setError("Payment was not completed.");
+        return;
+      }
+
+      if (paymentIntent.status !== "succeeded") {
+        setError("Payment was not completed. Please try again.");
+        return;
+      }
+
+      setPhase("generating");
+
+      const unlock = await unlockPremium(sessionId, paymentIntent.id);
+      if (!unlock.success) {
+        setError(unlock.error);
+        return;
+      }
+
+      if (unlock.data.premiumReading) {
+        onSuccess(unlock.data.premiumReading);
+        return;
+      }
+
+      const generated = await generatePremiumReading(sessionId);
+      if (!generated.success) {
+        setError(generated.error);
+        return;
+      }
+
+      onSuccess(generated.data.premiumReading);
+    } catch (err) {
+      console.error("[CheckoutForm] Error:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again.",
+      );
+    } finally {
+      setPhase("idle");
     }
-
-    if (!paymentIntent || paymentIntent.status !== "succeeded") {
-      setError("Payment was not completed.");
-      setProcessing(false);
-      return;
-    }
-
-    const result = await unlockPremium(sessionId, paymentIntent.id);
-    if (!result.success) {
-      setError(result.error);
-      setProcessing(false);
-      return;
-    }
-
-    onSuccess(result.data.premiumReading);
-    setProcessing(false);
   };
 
   return (
@@ -145,8 +187,7 @@ function CheckoutForm({
         <button
           type="button"
           onClick={onClose}
-          disabled={processing}
-          className="flex-1 rounded-full border px-3 py-2 text-xs tracking-wide disabled:opacity-50 sm:px-4 sm:py-2.5"
+          className="flex-1 rounded-full border px-3 py-2 text-xs tracking-wide sm:px-4 sm:py-2.5"
           style={{
             borderColor: easternTheme.goldDim,
             color: easternTheme.offWhiteMuted,
@@ -157,7 +198,7 @@ function CheckoutForm({
         </button>
         <button
           type="submit"
-          disabled={!stripe || processing}
+          disabled={!stripe || isBusy}
           className="flex-1 rounded-full px-3 py-2 text-xs font-medium tracking-wide disabled:opacity-50 sm:px-4 sm:py-2.5"
           style={{
             background: `linear-gradient(135deg, oklch(0.55 0.12 70), oklch(0.45 0.1 55))`,
@@ -166,7 +207,7 @@ function CheckoutForm({
             border: `1px solid ${easternTheme.goldDim}`,
           }}
         >
-          {processing ? "Processing..." : "Pay $0.99"}
+          {payLabel}
         </button>
       </div>
     </form>
@@ -195,6 +236,8 @@ function PaymentElementsWrapper({
   const elementsOptions: StripeElementsOptions = {
     clientSecret,
     appearance: stripeAppearance,
+    /** 브라우저가 ko여도 결제 UI는 앱과 같이 영어로 */
+    locale: "en",
   };
 
   return (
