@@ -31,7 +31,8 @@ type Phase =
 const heroEase = [0.25, 0.8, 0.25, 1] as const;
 const HERO_DURATION = 2.2;
 const CONTENT_DELAY = 0.9;
-const HEADER_FINAL_TOP = 24;
+const HEADER_FINAL_TOP_DESKTOP = 24;
+const HEADER_FINAL_TOP_MOBILE = 12;
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function Home() {
@@ -50,15 +51,36 @@ export default function Home() {
 
   const headerRef = useRef<HTMLElement>(null);
   const submittingRef = useRef(false);
-  const [slideY, setSlideY]   = useState(0);
-  const [headerH, setHeaderH] = useState(140);
+  const [slideY, setSlideY] = useState(0);
+  const [contentTop, setContentTop] = useState(192);
 
-  useEffect(() => {
+  const measureHeader = () => {
     const el = headerRef.current;
     if (!el) return;
+    const isNarrow = window.innerWidth < 768;
+    const safeTop =
+      parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue(
+          "--sat",
+        ),
+      ) || 0;
+    const finalTop = isNarrow
+      ? HEADER_FINAL_TOP_MOBILE + safeTop
+      : HEADER_FINAL_TOP_DESKTOP;
+    const gap = isNarrow ? 20 : 28;
     const { top, height } = el.getBoundingClientRect();
-    setSlideY(-(top - HEADER_FINAL_TOP));
-    setHeaderH(height);
+    setSlideY(-(top - finalTop));
+    setContentTop(finalTop + height + gap);
+  };
+
+  useEffect(() => {
+    measureHeader();
+    window.addEventListener("resize", measureHeader);
+    window.addEventListener("orientationchange", measureHeader);
+    return () => {
+      window.removeEventListener("resize", measureHeader);
+      window.removeEventListener("orientationchange", measureHeader);
+    };
   }, []);
 
   useEffect(() => {
@@ -213,8 +235,6 @@ export default function Home() {
       ? localStorage.getItem("mystic_zodiac_sign")
       : null;
 
-  const contentTop = HEADER_FINAL_TOP + headerH + 28;
-
   return (
     <div className="relative min-h-dvh overflow-x-hidden">
       <CosmicBackground />
@@ -224,7 +244,7 @@ export default function Home() {
         <div className="pointer-events-none flex min-h-dvh flex-col items-center justify-center">
           <motion.header
             ref={headerRef}
-            className="pointer-events-auto flex flex-col items-center px-4"
+            className="pointer-events-auto flex flex-col items-center px-4 pt-[max(0.5rem,env(safe-area-inset-top))]"
             animate={{ y: showContent ? slideY : 0 }}
             transition={{ duration: HERO_DURATION, ease: heroEase }}
           >
@@ -238,7 +258,7 @@ export default function Home() {
                   : { duration: 0.65, ease: [0.4, 0, 0.2, 1] }
               }
             >
-              <div className="mx-auto h-22 w-22 md:h-24 md:w-24">
+              <div className="mx-auto h-18 w-18 sm:h-22 sm:w-22 md:h-24 md:w-24">
                 <SacredGeometryLogo />
               </div>
             </motion.div>
@@ -289,7 +309,7 @@ export default function Home() {
             {phase === "question" && (
               <motion.div
                 key="question-form"
-                className="px-4 pb-28 sm:px-6"
+                className="px-4 pb-[max(7rem,calc(5rem+env(safe-area-inset-bottom)))] sm:px-6"
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, transition: { duration: 0.3, ease: [0.4, 0, 1, 1] } }}
@@ -308,7 +328,7 @@ export default function Home() {
 
           {/* Message + card section */}
           {showMessage && (
-            <div className="flex flex-col items-center px-4 pb-28 sm:px-6">
+            <div className="flex flex-col items-center px-4 pb-[max(7rem,calc(5rem+env(safe-area-inset-bottom)))] sm:px-6">
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -507,7 +527,7 @@ function IntentionForm({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Ask a question or share what you're seeking guidance on..."
-          className="w-full resize-none bg-transparent px-5 py-4 text-sm leading-relaxed text-white/80 outline-none placeholder:text-white/25"
+          className="w-full resize-none bg-transparent px-4 py-3.5 text-base leading-relaxed text-white/80 outline-none placeholder:text-white/25 sm:px-5 sm:py-4 sm:text-sm"
           style={{ caretColor: "oklch(0.75 0.14 240)" }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && isValid) onSubmit();

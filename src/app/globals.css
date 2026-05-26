@@ -1,21 +1,14 @@
 @import "tailwindcss";
 
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+}
+
 @theme {
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
-  --animate-twinkle: twinkle var(--twinkle-duration, 4s) ease-in-out infinite;
   --animate-nebula-breathe: nebula-breathe 22s ease-in-out infinite;
-}
-
-/* opacity만 — transform 없이 끊김 적은 반짝임 */
-@keyframes twinkle {
-  0%,
-  100% {
-    opacity: 0.35;
-  }
-  50% {
-    opacity: 0.95;
-  }
 }
 
 /* blur 레이어는 고정, opacity만 — translate+blur 조합보다 훨씬 가벼움 */
@@ -45,12 +38,13 @@ html.cosmic-bg-paused .cosmic-bg-root * {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-twinkle {
-    animation: none;
-    opacity: 0.65;
-  }
-
   .animate-nebula-breathe {
+    animation: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .cosmic-nebula {
     animation: none;
   }
 }

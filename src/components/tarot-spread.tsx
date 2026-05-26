@@ -14,8 +14,10 @@ import {
   resumeCosmicBackground
 } from '@/lib/cosmic-bg-pause'
 
-const CARD_W = 96
-const CARD_H = 134
+/** 320px 뷰포트에서 3장 + gap이 넘치지 않도록 (px-4 기준 ~288px) */
+const CARD_W = 88
+const CARD_H = 122
+const CARD_GAP = 8
 const FLIGHT_MS = 580 // flying card animation duration (ms)
 const heroEase = [0.22, 1, 0.36, 1] as const
 // 안정적인 참조 — 매 렌더마다 새 화살표 함수 생성 방지
@@ -229,10 +231,10 @@ export function TarotSpread ({ onAllSelected, onReveal }: TarotSpreadProps) {
         const wheelBottom = wheelEl
           ? wheelEl.getBoundingClientRect().bottom + 24
           : window.innerHeight * 0.65
-        const totalW = 3 * CARD_W + 2 * 16
+        const totalW = 3 * CARD_W + 2 * CARD_GAP
         const startX = window.innerWidth / 2 - totalW / 2
         destRect = {
-          x: startX + slotIndex * (CARD_W + 16),
+          x: startX + slotIndex * (CARD_W + CARD_GAP),
           y: wheelBottom,
           width: CARD_W,
           height: CARD_H
@@ -345,7 +347,7 @@ export function TarotSpread ({ onAllSelected, onReveal }: TarotSpreadProps) {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.92, y: 4 }}
               transition={{ duration: 0.28, ease: heroEase }}
-              className='relative z-10 flex w-full max-w-xl flex-col items-center gap-8 rounded-2xl px-16 py-[52px] text-center'
+              className='relative z-10 flex w-full max-w-xl flex-col items-center gap-6 rounded-2xl px-6 py-10 text-center sm:gap-8 sm:px-16 sm:py-[52px]'
               style={{
                 background: 'oklch(0.11 0.05 255 / 0.95)',
                 border: '1px solid oklch(0.55 0.1 240 / 0.2)',
@@ -444,7 +446,7 @@ export function TarotSpread ({ onAllSelected, onReveal }: TarotSpreadProps) {
           pointerEvents: spreadVisible ? 'auto' : 'none'
         }}
       >
-        <div className='flex items-start justify-center gap-4 sm:gap-6'>
+        <div className='flex items-start justify-center gap-2 sm:gap-6'>
           {Array.from({ length: 3 }).map((_, i) => {
             const landed = selected[i] !== undefined
             const inFlight =

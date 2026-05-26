@@ -16,7 +16,9 @@ export function SacredGeometryLogo({
   return (
     <div className={`relative ${className}`}>
       {/* Outer glow effect */}
-      {!hideGlow && <div className="absolute inset-0 blur-2xl bg-[oklch(0.7_0.15_260/0.3)] rounded-full scale-150" />}
+      {!hideGlow && (
+        <div className="absolute inset-0 hidden scale-150 rounded-full bg-[oklch(0.7_0.15_260/0.3)] blur-2xl sm:block" />
+      )}
       
       <svg
         viewBox="0 0 200 200"
