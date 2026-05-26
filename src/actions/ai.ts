@@ -34,7 +34,7 @@ import {
 
 // ── Groq 클라이언트 (OpenAI-compatible) ───────────────────────────────────────
 
-const AI_MODEL = "llama3-70b-8192" as const;
+const AI_MODEL = "llama-3.3-70b-versatile" as const;
 
 const POSITION_LABELS = ["Past", "Present", "Future"] as const;
 
