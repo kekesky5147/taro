@@ -1,14 +1,15 @@
 /**
- * Gemini 타로 해석 Server Action
+ * Groq (OpenAI-compatible) 타로 해석 Server Action
  *
  * generateTarotReading:
  *   - 사용자의 intention(고민)과 선택된 카드 3장을 받아
- *   - Gemini API로 동양철학적 관점의 타로 리딩을 생성하고
+ *   - Groq API로 타로 리딩을 생성하고
  *   - reading_sessions 테이블에 결과를 저장합니다.
  */
 "use server";
 
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
+import OpenAI from "openai";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { db } from "@/lib/db";
 import { readingSessions, sessionCards, tarotCards } from "@/db";
 import { eq, inArray } from "drizzle-orm";
@@ -31,13 +32,9 @@ import {
   isCompleteStandardReading,
 } from "@/lib/reading-sections";
 
-// ── Gemini 클라이언트 ─────────────────────────────────────────────────────────
+// ── Groq 클라이언트 (OpenAI-compatible) ───────────────────────────────────────
 
-const genai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-
-// ── 상수 ─────────────────────────────────────────────────────────────────────
-
-const AI_MODEL = "gemini-2.5-flash" as const;
+const AI_MODEL = "llama3-70b-8192" as const;
 
 const POSITION_LABELS = ["Past", "Present", "Future"] as const;
 
@@ -45,91 +42,160 @@ const POSITION_LABELS = ["Past", "Present", "Future"] as const;
 const COMBINED_MAX_OUTPUT_TOKENS = 1200;
 const PREMIUM_MAX_OUTPUT_TOKENS = 4096;
 
-const geminiSafetySettings = [
-  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-] as const;
+const GROQ_RETRY_ATTEMPTS = 3;
+const GROQ_RETRY_BASE_MS = 900;
 
-function mapGeminiError(err: unknown): ActionResult<never> {
-  const msg = err instanceof Error ? err.message : String(err);
-  if (msg.includes("429") || msg.toLowerCase().includes("quota")) {
-    return { success: false, error: "429: Too many requests. Please try again in a moment." };
+function getGroqClient(): OpenAI {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    throw new Error("GROQ_API_KEY is not configured.");
   }
-  if (msg.includes("401") || msg.toLowerCase().includes("api key")) {
-    return { success: false, error: "Authentication failed. Please contact the administrator." };
+  return new OpenAI({
+    apiKey,
+    baseURL: "https://api.groq.com/openai/v1",
+  });
+}
+
+function errorMessage(err: unknown): string {
+  if (err instanceof OpenAI.APIError) {
+    return `${err.status ?? ""} ${err.message}`.trim();
+  }
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+function mapGroqError(err: unknown): ActionResult<never> {
+  const msg = errorMessage(err).toLowerCase();
+
+  if (
+    err instanceof OpenAI.APIError &&
+    (err.status === 429 || err.code === "rate_limit_exceeded")
+  ) {
+    return {
+      success: false,
+      error: "429: Too many requests. Please try again in a moment.",
+    };
   }
   if (
+    msg.includes("429") ||
+    msg.includes("rate limit") ||
+    msg.includes("quota") ||
+    msg.includes("too many requests")
+  ) {
+    return {
+      success: false,
+      error: "429: Too many requests. Please try again in a moment.",
+    };
+  }
+  if (
+    (err instanceof OpenAI.APIError && err.status === 401) ||
+    msg.includes("401") ||
+    msg.includes("invalid api key") ||
+    msg.includes("api key")
+  ) {
+    return {
+      success: false,
+      error: "Authentication failed. Please contact the administrator.",
+    };
+  }
+  if (
+    (err instanceof OpenAI.APIError && err.status !== undefined && err.status >= 500) ||
     msg.includes("500") ||
     msg.includes("503") ||
     msg.includes("502") ||
-    msg.includes("Internal Server Error")
+    msg.includes("internal server error") ||
+    msg.includes("service unavailable")
   ) {
     return {
       success: false,
       error: "The AI service is temporarily unavailable. Please try again in a moment.",
     };
   }
-  return { success: false, error: "An error occurred while generating your reading. Please try again." };
+  if (msg.includes("groq_api_key is not configured")) {
+    return {
+      success: false,
+      error: "AI service is not configured. Please contact the administrator.",
+    };
+  }
+  return {
+    success: false,
+    error: "An error occurred while generating your reading. Please try again.",
+  };
 }
 
-function isRetryableGeminiError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
+function isRetryableGroqError(err: unknown): boolean {
+  if (err instanceof OpenAI.APIError) {
+    if (err.status === 429) return true;
+    if (err.status !== undefined && err.status >= 500) return true;
+  }
+  const msg = errorMessage(err).toLowerCase();
   return (
     msg.includes("429") ||
     msg.includes("500") ||
     msg.includes("503") ||
     msg.includes("502") ||
-    msg.includes("Internal Server Error") ||
-    msg.toLowerCase().includes("unavailable") ||
-    msg.toLowerCase().includes("deadline")
+    msg.includes("rate limit") ||
+    msg.includes("unavailable") ||
+    msg.includes("timeout") ||
+    msg.includes("deadline")
   );
 }
 
-const GEMINI_RETRY_ATTEMPTS = 3;
-const GEMINI_RETRY_BASE_MS = 900;
-
-async function generateGeminiTextWithRetry(
+async function createGroqCompletion(
   maxOutputTokens: number,
-  prompt: string,
+  messages: ChatCompletionMessageParam[],
+): Promise<string> {
+  const openai = getGroqClient();
+  const completion = await openai.chat.completions.create({
+    model: AI_MODEL,
+    messages,
+    temperature: 0.75,
+    max_tokens: maxOutputTokens,
+  });
+
+  const text = completion.choices[0]?.message?.content?.trim();
+  if (!text) {
+    throw new Error("Groq response is empty.");
+  }
+  return text;
+}
+
+async function generateGroqTextWithRetry(
+  maxOutputTokens: number,
+  messages: ChatCompletionMessageParam[],
   options?: {
     validate?: (text: string) => boolean;
     logLabel?: string;
   },
 ): Promise<string> {
-  const model = getGeminiModel(maxOutputTokens);
-  const label = options?.logLabel ?? "Gemini";
+  const label = options?.logLabel ?? "Groq";
   let lastErr: unknown;
 
-  for (let attempt = 0; attempt < GEMINI_RETRY_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < GROQ_RETRY_ATTEMPTS; attempt++) {
     try {
       if (attempt > 0) {
         await new Promise((resolve) =>
-          setTimeout(resolve, GEMINI_RETRY_BASE_MS * attempt),
+          setTimeout(resolve, GROQ_RETRY_BASE_MS * attempt),
         );
       }
 
-      const result = await model.generateContent(prompt);
-      const text = result.response.text()?.trim();
-      if (!text) {
-        throw new Error("Gemini response is empty.");
-      }
+      const text = await createGroqCompletion(maxOutputTokens, messages);
 
       if (options?.validate && !options.validate(text)) {
-        throw new Error("Gemini response incomplete.");
+        throw new Error("Groq response incomplete.");
       }
 
       return text;
     } catch (err) {
       lastErr = err;
-      const retryable = isRetryableGeminiError(err);
+      const retryable = isRetryableGroqError(err);
       const incomplete =
-        err instanceof Error && err.message === "Gemini response incomplete.";
+        err instanceof Error && err.message === "Groq response incomplete.";
 
-      if (attempt < GEMINI_RETRY_ATTEMPTS - 1 && (retryable || incomplete)) {
+      if (attempt < GROQ_RETRY_ATTEMPTS - 1 && (retryable || incomplete)) {
         console.warn(
-          `[${label}] ${retryable ? "API" : "incomplete"} error — retry ${attempt + 2}/${GEMINI_RETRY_ATTEMPTS}`,
+          `[${label}] ${retryable ? "API" : "incomplete"} error — retry ${attempt + 2}/${GROQ_RETRY_ATTEMPTS}`,
+          errorMessage(err),
         );
         continue;
       }
@@ -138,17 +204,6 @@ async function generateGeminiTextWithRetry(
   }
 
   throw lastErr;
-}
-
-function getGeminiModel(maxOutputTokens: number) {
-  return genai.getGenerativeModel(
-    {
-      model: AI_MODEL,
-      generationConfig: { temperature: 0.75, maxOutputTokens },
-      safetySettings: [...geminiSafetySettings],
-    },
-    { apiVersion: "v1beta" },
-  );
 }
 
 /** ### Sage Invitation 이하를 티저로 분리 */
@@ -184,9 +239,12 @@ async function generateCombinedReadingFromApi(
   systemPrompt: string,
   userPrompt: string,
 ): Promise<CachedReadingPayload> {
-  const raw = await generateGeminiTextWithRetry(
+  const raw = await generateGroqTextWithRetry(
     COMBINED_MAX_OUTPUT_TOKENS,
-    `${systemPrompt}\n\n${userPrompt}`,
+    [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
     {
       logLabel: "generateTarotReading",
       validate: (text) => {
@@ -198,7 +256,7 @@ async function generateCombinedReadingFromApi(
 
   const parsed = parseCombinedReading(raw);
   if (!parsed.reading) {
-    throw new Error("Gemini returned an empty reading.");
+    throw new Error("Groq returned an empty reading.");
   }
   return { reading: parsed.reading, easternTeaser: parsed.easternTeaser };
 }
@@ -395,7 +453,7 @@ Write the full output: ### Past / ### Present / ### Future / ### Message / ### S
         };
       }
     }
-    return mapGeminiError(err);
+    return mapGroqError(err);
   }
 }
 
@@ -460,10 +518,11 @@ ${zodiacLine}
 
 An Eastern philosopher beside you is curious about this seeker's fate. Write exactly 2 short sentences in the tarot reader's voice, hinting that inviting the Sage could deepen the reading through yin-yang and the five elements. Warm, inviting — not a full reading. No headers.`;
 
-    const model = getGeminiModel(200);
-    const result = await model.generateContent(teaserPrompt);
-    const easternTeaser = result.response.text()?.trim();
-    if (!easternTeaser) throw new Error("Eastern teaser response is empty.");
+    const easternTeaser = await generateGroqTextWithRetry(
+      200,
+      [{ role: "user", content: teaserPrompt }],
+      { logLabel: "generateEasternTeaser" },
+    );
 
     await db
       .update(readingSessions)
@@ -473,7 +532,7 @@ An Eastern philosopher beside you is curious about this seeker's fate. Write exa
     return { success: true, data: { easternTeaser } };
   } catch (err) {
     console.error("[generateEasternTeaser] Error:", err);
-    const mapped = mapGeminiError(err);
+    const mapped = mapGroqError(err);
     if (!mapped.success) return mapped;
     return { success: false, error: "Failed to generate Eastern preview." };
   }
@@ -615,9 +674,12 @@ ${standardReading}
 
 Provide "The Sage's Perspective" — a long, saju-style narrative reading (tarot reader + Sage). Use headers ### Past / ### Present / ### Future / ### Message. Complete ALL 4 sections with the required length. Address the seeker's concern throughout.`;
 
-      premiumReading = await generateGeminiTextWithRetry(
+      premiumReading = await generateGroqTextWithRetry(
         PREMIUM_MAX_OUTPUT_TOKENS,
-        `${PREMIUM_SYSTEM_PROMPT}\n\n${userPrompt}`,
+        [
+          { role: "system", content: PREMIUM_SYSTEM_PROMPT },
+          { role: "user", content: userPrompt },
+        ],
         {
           logLabel: "generatePremiumReading",
           validate: isCompletePremiumReading,
@@ -668,7 +730,7 @@ Provide "The Sage's Perspective" — a long, saju-style narrative reading (tarot
       }
     }
 
-    const mapped = mapGeminiError(err);
+    const mapped = mapGroqError(err);
     if (!mapped.success) {
       return { success: false, error: mapped.error };
     }
