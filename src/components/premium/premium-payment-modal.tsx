@@ -13,11 +13,11 @@ import {
 import type { StripePaymentElementOptions } from "@stripe/stripe-js";
 import { generatePremiumReading } from "@/actions/ai";
 import { unlockPremium } from "@/actions/premium";
-
-type CheckoutPhase = "idle" | "paying" | "generating";
 import { cinematicEase, easternTheme } from "./premium-eastern-theme";
 
-/** 모바일 키보드 대응 — 컴팩트 Payment Element (이메일·영수증 필드 유지) */
+type CheckoutPhase = "idle" | "paying" | "generating";
+
+/** 모바일 키보드 대응 — tabs + 최소 세로 높이 (이메일·영수증 필드 유지) */
 const stripeAppearance: Appearance = {
   theme: "night",
   variables: {
@@ -25,51 +25,55 @@ const stripeAppearance: Appearance = {
     colorBackground: easternTheme.ink,
     colorText: easternTheme.offWhite,
     colorTextSecondary: easternTheme.offWhiteMuted,
-    borderRadius: "8px",
-    fontSizeBase: "16px",
-    spacingUnit: "3px",
-    gridColumnSpacing: "8px",
-    gridRowSpacing: "6px",
-    accordionItemSpacing: "4px",
-    tabSpacing: "4px",
-    fontLineHeight: "1.35",
+    borderRadius: "6px",
+    fontSizeBase: "15px",
+    fontSizeSm: "12px",
+    fontSizeXs: "11px",
+    spacingUnit: "2px",
+    gridColumnSpacing: "6px",
+    gridRowSpacing: "4px",
+    tabSpacing: "2px",
+    fontLineHeight: "1.25",
   },
   rules: {
     ".Input": {
-      padding: "8px 10px",
+      padding: "6px 8px",
       boxShadow: "none",
+      fontSize: "15px",
+      lineHeight: "1.25",
     },
     ".Label": {
-      marginBottom: "2px",
-      fontSize: "12px",
+      marginBottom: "1px",
+      fontSize: "11px",
+      lineHeight: "1.2",
     },
     ".Block": {
-      padding: "6px 8px",
-    },
-    ".AccordionItem": {
-      padding: "6px 8px",
+      padding: "4px 6px",
     },
     ".Tab": {
-      padding: "6px 8px",
+      padding: "4px 6px",
     },
     ".TabLabel": {
-      fontSize: "13px",
+      fontSize: "11px",
+      lineHeight: "1.2",
+    },
+    ".TabIcon": {
+      width: "1.1rem",
     },
     ".Error": {
-      fontSize: "12px",
-      marginTop: "4px",
+      fontSize: "11px",
+      marginTop: "2px",
+      lineHeight: "1.25",
+    },
+    ".Text": {
+      fontSize: "11px",
+      lineHeight: "1.25",
     },
   },
 };
 
 const paymentElementOptions: StripePaymentElementOptions = {
-  layout: {
-    type: "accordion",
-    defaultCollapsed: true,
-    spacedAccordionItems: false,
-    radios: false,
-    visibleAccordionItemsCount: 3,
-  },
+  layout: "tabs",
   fields: {
     billingDetails: {
       email: "auto",
@@ -176,7 +180,7 @@ function CheckoutForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-3">
+    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-2 sm:gap-3">
       <PaymentElement options={paymentElementOptions} />
       {error && (
         <p className="text-center text-xs" style={{ color: "oklch(0.65 0.12 25 / 0.9)" }}>
