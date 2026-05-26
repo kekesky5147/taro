@@ -11,6 +11,7 @@ import { CrossroadsChoice } from "@/components/mystic-path/crossroads-choice";
 import { PremiumPaymentModal } from "@/components/premium/premium-payment-modal";
 import { submitReading } from "@/actions/reading";
 import { createPaymentIntent, unlockPremiumDev } from "@/actions/premium";
+import { shouldSkipPaymentInDev } from "@/lib/payment-mode";
 import type { TarotCard } from "@/lib/tarot-data";
 import type { MysticPathChoice, ReadingCardInput, SubmitReadingResult } from "@/types/reading";
 
@@ -26,9 +27,10 @@ type Phase =
   | "crossroads"
   | "result";
 
-const heroEase = [0.22, 1, 0.36, 1] as const;
-const HERO_DURATION = 4.0;
-const CONTENT_DELAY = 1.5;
+// ease-out-cubic: 부드럽게 감속하며 자연스럽게 착지 — 슬라이드 전용
+const heroEase = [0.25, 0.8, 0.25, 1] as const;
+const HERO_DURATION = 2.2;
+const CONTENT_DELAY = 0.9;
 const HEADER_FINAL_TOP = 24;
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -171,7 +173,7 @@ export default function Home() {
     setErrorMsg(null);
 
     try {
-      if (process.env.NODE_ENV === "development") {
+      if (shouldSkipPaymentInDev()) {
         const result = await unlockPremiumDev(readingResult.sessionId);
         if (!result.success) {
           setErrorMsg(result.error);
@@ -225,18 +227,16 @@ export default function Home() {
             className="pointer-events-auto flex flex-col items-center px-4"
             animate={{ y: showContent ? slideY : 0 }}
             transition={{ duration: HERO_DURATION, ease: heroEase }}
-            style={{ willChange: "transform" }}
           >
             {/* logo */}
             <motion.div
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0, scale: showContent ? 0.72 : 1 }}
               transition={
                 showContent
                   ? { duration: HERO_DURATION, ease: heroEase }
-                  : { opacity: { duration: 0.7, ease: heroEase }, y: { duration: 0.7, ease: heroEase } }
+                  : { duration: 0.65, ease: [0.4, 0, 0.2, 1] }
               }
-              style={{ willChange: "transform" }}
             >
               <div className="mx-auto h-22 w-22 md:h-24 md:w-24">
                 <SacredGeometryLogo />
@@ -245,9 +245,9 @@ export default function Home() {
 
             {/* title */}
             <motion.h1
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, ease: heroEase, delay: 0.25 }}
+              transition={{ duration: 0.65, ease: [0.4, 0, 0.2, 1], delay: 0.18 }}
               className="mt-2 text-center font-serif text-[clamp(1.35rem,4.5vw,2rem)] tracking-[0.2em] md:tracking-[0.24em]"
             >
               <span
@@ -272,7 +272,7 @@ export default function Home() {
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                  transition={{ duration: 0.7, ease: heroEase, delay: 0.5 }}
+                  transition={{ duration: 0.55, ease: [0.4, 0, 0.2, 1], delay: 0.32 }}
                   className="mt-3 max-w-[18rem] text-center text-[11px] leading-relaxed text-white/35"
                 >
                   Your daily tarot reading awaits
@@ -290,10 +290,10 @@ export default function Home() {
               <motion.div
                 key="question-form"
                 className="px-4 pb-28 sm:px-6"
-                initial={{ opacity: 0, y: 16 }}
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, transition: { duration: 0.45, ease: heroEase } }}
-                transition={{ duration: 1.5, ease: heroEase, delay: CONTENT_DELAY }}
+                exit={{ opacity: 0, transition: { duration: 0.3, ease: [0.4, 0, 1, 1] } }}
+                transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1], delay: CONTENT_DELAY }}
               >
                 <div className="mx-auto w-full max-w-lg">
                   <IntentionForm
@@ -312,7 +312,7 @@ export default function Home() {
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ duration: 0.9, ease: heroEase }}
+                transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
                 className="mb-8 max-w-sm text-center font-serif text-sm leading-relaxed"
                 style={{ color: "oklch(0.75 0.08 240 / 0.75)" }}
               >
@@ -324,9 +324,9 @@ export default function Home() {
                   <motion.div
                     key="card-wheel"
                     className="w-full max-w-3xl"
-                    initial={{ opacity: 0, y: 16 }}
+                    initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 1.2, ease: heroEase }}
+                    transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
                   >
                     {/* 에러 메시지 */}
                     <AnimatePresence>
@@ -405,9 +405,9 @@ export default function Home() {
                     {/* Results — after path chosen */}
                     {phase === "result" && selectedCards && readingResult && mysticPath && (
                       <motion.div
-                        initial={{ opacity: 0, y: 20 }}
+                        initial={{ opacity: 0, y: 16 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.55, ease: heroEase }}
+                        transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
                       >
                         <TarotResult
                           cards={selectedCards}

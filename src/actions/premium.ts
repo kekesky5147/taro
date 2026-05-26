@@ -9,7 +9,7 @@ import { readingSessions } from "@/db";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { generatePremiumReading } from "./ai";
-import { shouldSkipPaymentInDev } from "@/lib/reading-response-cache";
+import { shouldSkipPaymentInDev } from "@/lib/payment-mode";
 import type { ActionResult } from "@/types/session";
 
 const sessionIdSchema = z.object({

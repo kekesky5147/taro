@@ -10,7 +10,6 @@ import {
   varchar,
   text,
   integer,
-  boolean,
   jsonb,
   timestamp,
 } from "drizzle-orm/pg-core";

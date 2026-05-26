@@ -4,24 +4,14 @@ import { useState, useEffect, useCallback } from "react";
 import { LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { TarotInfiniteWheel } from "@/components/tarot-infinite-wheel";
-import { TAROT_DECK } from "@/lib/tarot-data";
+import { TAROT_DECK, type TarotCard } from "@/lib/tarot-data";
 
 interface DashboardProps {
   onLogout: () => void;
 }
 
-interface CardData {
-  id: number;
-  name: string;
-  numeral: string;
-  type: "major" | "minor";
-  suit?: "wands" | "cups" | "swords" | "pentacles";
-  keywords: string[];
-  upright: string;
-}
-
-const majorArcana: CardData[] = TAROT_DECK.filter((c) => c.type === "major").slice(0, 7);
-const minorArcana: CardData[] = TAROT_DECK.filter((c) => c.type === "minor").slice(0, 7);
+const majorArcana: TarotCard[] = TAROT_DECK.filter((c) => c.type === "major").slice(0, 7);
+const minorArcana: TarotCard[] = TAROT_DECK.filter((c) => c.type === "minor").slice(0, 7);
 
 type Phase = "stacked" | "shuffling" | "dealing" | "selecting";
 
@@ -30,8 +20,8 @@ const CARD_HEIGHT = 196;
 export function Dashboard({ onLogout }: DashboardProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [phase, setPhase] = useState<Phase>("stacked");
-  const [selectedMajor, setSelectedMajor] = useState<CardData | null>(null);
-  const [selectedMinor, setSelectedMinor] = useState<CardData | null>(null);
+  const [selectedMajor, setSelectedMajor] = useState<TarotCard | null>(null);
+  const [selectedMinor, setSelectedMinor] = useState<TarotCard | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(0);
 
@@ -57,13 +47,13 @@ export function Dashboard({ onLogout }: DashboardProps) {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleWheelCenterChange = useCallback(
-    (_card: CardData, deckIndex: number) => {
+    (_card: TarotCard, deckIndex: number) => {
       setFocusedIndex(deckIndex);
     },
     [],
   );
 
-  const handleSelectCard = (card: CardData) => {
+  const handleSelectCard = (card: TarotCard) => {
     if (phase !== "selecting" || isTransitioning) return;
     
     // Only allow selecting the focused card

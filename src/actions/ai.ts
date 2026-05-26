@@ -26,6 +26,10 @@ import {
   type CachedReadingPayload,
   type ReadingResolveSource,
 } from "@/lib/reading-response-cache";
+import {
+  isCompletePremiumReading,
+  isCompleteStandardReading,
+} from "@/lib/reading-sections";
 
 // ── Gemini 클라이언트 ─────────────────────────────────────────────────────────
 
@@ -38,7 +42,7 @@ const AI_MODEL = "gemini-2.5-flash" as const;
 const POSITION_LABELS = ["Past", "Present", "Future"] as const;
 
 /** 무료 리딩 1회 = API 1회 (표준 해석 + Sage 초대 티저 동시 생성) */
-const COMBINED_MAX_OUTPUT_TOKENS = 900;
+const COMBINED_MAX_OUTPUT_TOKENS = 1200;
 const PREMIUM_MAX_OUTPUT_TOKENS = 4096;
 
 const geminiSafetySettings = [
@@ -56,7 +60,84 @@ function mapGeminiError(err: unknown): ActionResult<never> {
   if (msg.includes("401") || msg.toLowerCase().includes("api key")) {
     return { success: false, error: "Authentication failed. Please contact the administrator." };
   }
+  if (
+    msg.includes("500") ||
+    msg.includes("503") ||
+    msg.includes("502") ||
+    msg.includes("Internal Server Error")
+  ) {
+    return {
+      success: false,
+      error: "The AI service is temporarily unavailable. Please try again in a moment.",
+    };
+  }
   return { success: false, error: "An error occurred while generating your reading. Please try again." };
+}
+
+function isRetryableGeminiError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes("429") ||
+    msg.includes("500") ||
+    msg.includes("503") ||
+    msg.includes("502") ||
+    msg.includes("Internal Server Error") ||
+    msg.toLowerCase().includes("unavailable") ||
+    msg.toLowerCase().includes("deadline")
+  );
+}
+
+const GEMINI_RETRY_ATTEMPTS = 3;
+const GEMINI_RETRY_BASE_MS = 900;
+
+async function generateGeminiTextWithRetry(
+  maxOutputTokens: number,
+  prompt: string,
+  options?: {
+    validate?: (text: string) => boolean;
+    logLabel?: string;
+  },
+): Promise<string> {
+  const model = getGeminiModel(maxOutputTokens);
+  const label = options?.logLabel ?? "Gemini";
+  let lastErr: unknown;
+
+  for (let attempt = 0; attempt < GEMINI_RETRY_ATTEMPTS; attempt++) {
+    try {
+      if (attempt > 0) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, GEMINI_RETRY_BASE_MS * attempt),
+        );
+      }
+
+      const result = await model.generateContent(prompt);
+      const text = result.response.text()?.trim();
+      if (!text) {
+        throw new Error("Gemini response is empty.");
+      }
+
+      if (options?.validate && !options.validate(text)) {
+        throw new Error("Gemini response incomplete.");
+      }
+
+      return text;
+    } catch (err) {
+      lastErr = err;
+      const retryable = isRetryableGeminiError(err);
+      const incomplete =
+        err instanceof Error && err.message === "Gemini response incomplete.";
+
+      if (attempt < GEMINI_RETRY_ATTEMPTS - 1 && (retryable || incomplete)) {
+        console.warn(
+          `[${label}] ${retryable ? "API" : "incomplete"} error — retry ${attempt + 2}/${GEMINI_RETRY_ATTEMPTS}`,
+        );
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastErr;
 }
 
 function getGeminiModel(maxOutputTokens: number) {
@@ -97,6 +178,29 @@ function parseCombinedReading(raw: string): { reading: string; easternTeaser: st
   const reading = raw.slice(0, idx).trim();
   const easternTeaser = raw.slice(idx).replace(marker, "").trim() || null;
   return { reading, easternTeaser };
+}
+
+async function generateCombinedReadingFromApi(
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<CachedReadingPayload> {
+  const raw = await generateGeminiTextWithRetry(
+    COMBINED_MAX_OUTPUT_TOKENS,
+    `${systemPrompt}\n\n${userPrompt}`,
+    {
+      logLabel: "generateTarotReading",
+      validate: (text) => {
+        const parsed = parseCombinedReading(text);
+        return isCompleteStandardReading(parsed.reading, parsed.easternTeaser);
+      },
+    },
+  );
+
+  const parsed = parseCombinedReading(raw);
+  if (!parsed.reading) {
+    throw new Error("Gemini 리딩 본문이 비어 있습니다.");
+  }
+  return { reading: parsed.reading, easternTeaser: parsed.easternTeaser };
 }
 
 // ── 언어 감지 ─────────────────────────────────────────────────────────────────
@@ -169,8 +273,12 @@ export async function generateTarotReading(
       return { success: false, error: "세션을 찾을 수 없습니다." };
     }
 
-    // 3. 이미 생성된 리딩이 있으면 DB 캐시 반환 (API 호출 없음)
-    if (session.status === "revealed" && session.aiReading) {
+    // 3. 이미 생성된 완전한 리딩이 있으면 DB 캐시 반환 (API 호출 없음)
+    if (
+      session.status === "revealed" &&
+      session.aiReading &&
+      isCompleteStandardReading(session.aiReading, session.easternTeaser)
+    ) {
       return {
         success: true,
         data: {
@@ -235,7 +343,13 @@ export async function generateTarotReading(
     let source: ReadingResolveSource;
 
     const resolved = await resolveCachedOrMockReading(cacheKey);
-    if (resolved) {
+    if (
+      resolved &&
+      isCompleteStandardReading(
+        resolved.payload.reading,
+        resolved.payload.easternTeaser,
+      )
+    ) {
       ({ reading, easternTeaser } = resolved.payload);
       source = resolved.source;
     } else {
@@ -250,19 +364,9 @@ ${cardDescriptions}
 
 Write the full output: ### Past / ### Present / ### Future / ### Message / ### Sage Invitation. Complete ALL 5 sections. Every word must be in ${language}.`;
 
-      const model = getGeminiModel(COMBINED_MAX_OUTPUT_TOKENS);
-      const result = await model.generateContent(`${SYSTEM_PROMPT}\n\n${userPrompt}`);
-      const raw = result.response.text();
-      if (!raw) {
-        throw new Error("Gemini 응답이 비어 있습니다.");
-      }
-
-      const parsed = parseCombinedReading(raw);
-      reading = parsed.reading;
-      easternTeaser = parsed.easternTeaser;
-      if (!reading) {
-        throw new Error("Gemini 리딩 본문이 비어 있습니다.");
-      }
+      const payload = await generateCombinedReadingFromApi(SYSTEM_PROMPT, userPrompt);
+      reading = payload.reading;
+      easternTeaser = payload.easternTeaser;
 
       await setCachedReading(cacheKey, { reading, easternTeaser });
       source = "api";
@@ -496,7 +600,7 @@ export async function generatePremiumReading(
     let source: ReadingResolveSource;
 
     const resolved = await resolveCachedOrMockPremiumReading(cacheKey);
-    if (resolved) {
+    if (resolved && isCompletePremiumReading(resolved.payload.premiumReading)) {
       premiumReading = resolved.payload.premiumReading;
       source = resolved.source;
     } else {
@@ -511,15 +615,15 @@ ${standardReading}
 
 Provide "The Sage's Perspective" — a long, saju-style narrative reading (tarot reader + Sage). Use headers ### Past / ### Present / ### Future / ### Message. Complete ALL 4 sections with the required length. Address the seeker's concern throughout.`;
 
-      const model = getGeminiModel(PREMIUM_MAX_OUTPUT_TOKENS);
-      const result = await model.generateContent(`${PREMIUM_SYSTEM_PROMPT}\n\n${userPrompt}`);
-      const text = result.response.text();
+      premiumReading = await generateGeminiTextWithRetry(
+        PREMIUM_MAX_OUTPUT_TOKENS,
+        `${PREMIUM_SYSTEM_PROMPT}\n\n${userPrompt}`,
+        {
+          logLabel: "generatePremiumReading",
+          validate: isCompletePremiumReading,
+        },
+      );
 
-      if (!text?.trim()) {
-        throw new Error("Gemini premium response is empty.");
-      }
-
-      premiumReading = text.trim();
       await setCachedPremiumReading(cacheKey, { premiumReading });
       source = "api";
     }
@@ -543,7 +647,12 @@ Provide "The Sage's Perspective" — a long, saju-style narrative reading (tarot
     };
   } catch (err) {
     console.error("[generatePremiumReading] Error:", err);
-    if (isDevelopmentReadingMode()) {
+
+    const allowMockFallback =
+      isDevelopmentReadingMode() ||
+      process.env.PREMIUM_MOCK_ON_FAILURE === "true";
+
+    if (allowMockFallback) {
       const mock = await getMockPremiumReading();
       if (mock) {
         console.warn("[generatePremiumReading] API failed — using mock fallback");
@@ -558,14 +667,10 @@ Provide "The Sage's Perspective" — a long, saju-style narrative reading (tarot
         return { success: true, data: { premiumReading: mock.premiumReading } };
       }
     }
+
     const mapped = mapGeminiError(err);
     if (!mapped.success) {
-      return {
-        success: false,
-        error: mapped.error.includes("429")
-          ? mapped.error
-          : "Failed to generate premium reading. Please try again.",
-      };
+      return { success: false, error: mapped.error };
     }
     return { success: false, error: "Failed to generate premium reading. Please try again." };
   }

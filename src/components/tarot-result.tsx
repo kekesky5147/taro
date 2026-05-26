@@ -1,65 +1,41 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { RefObject } from 'react'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { TarotCard } from '@/lib/tarot-data'
 import { getTarotCardImageUrl } from '@/lib/tarot-card-images'
 import type { MysticPathChoice } from '@/types/reading'
 import { EasternTeaserBlock } from '@/components/mystic-path/eastern-teaser-block'
+import { SacredGeometryLogo } from '@/components/sacred-geometry-logo'
 import { mysticEase, mysticTheme } from '@/components/mystic-path/mystic-theme'
-
-type ReadingSection = {
-  id: string
-  title: string
-  body: string
-}
-
-function parseReadingSections (reading: string): ReadingSection[] {
-  const lines = reading.trim().split('\n')
-  const sections: ReadingSection[] = []
-  let current: { title: string; lines: string[] } | null = null
-
-  for (const line of lines) {
-    const headerMatch =
-      line.match(/^#{1,4}\s+(.+)/) || line.match(/^\*\*(.+)\*\*\s*$/)
-
-    if (headerMatch) {
-      if (current && current.lines.join('').trim()) {
-        sections.push({
-          id: current.title.toLowerCase().replace(/\s+/g, '-'),
-          title: current.title,
-          body: current.lines.join('\n').trim()
-        })
-      }
-      current = { title: headerMatch[1].trim(), lines: [] }
-    } else if (current) {
-      current.lines.push(line)
-    }
-  }
-
-  if (current && current.lines.join('').trim()) {
-    sections.push({
-      id: current.title.toLowerCase().replace(/\s+/g, '-'),
-      title: current.title,
-      body: current.lines.join('\n').trim()
-    })
-  }
-
-  if (sections.length === 0) {
-    return [{ id: 'reading', title: 'Your Reading', body: reading.trim() }]
-  }
-
-  return sections
-}
-
-function findSectionBody (sections: ReadingSection[], title: string): string {
-  const key = title.toLowerCase()
-  const hit = sections.find(s => s.title.toLowerCase() === key)
-  return hit?.body ?? ''
-}
+import {
+  findSectionBody,
+  parseReadingSections
+} from '@/lib/reading-sections'
 
 const TIMELINE_SLOT_MIN_H = 'min(420px, 52vh)'
+const TIMELINE_CARD_WIDTH = 88
+const TIMELINE_CARD_HEIGHT = 124
+/** Message 카드 페이드인 delay(0.35) + duration(0.55) */
+const MESSAGE_FOCUS_DELAY_MS = 920
+
+/** 플립 뒷면 — 플레이스홀더 자리에 육망성 로고만 */
+function TimelineLogoPlaceholder ({ logoIdPrefix }: { logoIdPrefix: string }) {
+  return (
+    <div
+      className='relative shrink-0'
+      style={{ width: TIMELINE_CARD_WIDTH, height: TIMELINE_CARD_HEIGHT }}
+    >
+      <SacredGeometryLogo
+        className='h-full w-full opacity-90'
+        hideGlow
+        idPrefix={logoIdPrefix}
+      />
+    </div>
+  )
+}
 
 function timelineBoxStyle (isMajor: boolean) {
   return {
@@ -117,7 +93,7 @@ function TimelineReadingCard ({
         style={{ perspective: 1100, outlineColor: mysticTheme.goldDim }}
       >
         <motion.div
-          className='relative w-full'
+          className='relative w-full [contain:layout_paint]'
           style={{
             transformStyle: 'preserve-3d',
             minHeight: TIMELINE_SLOT_MIN_H
@@ -189,9 +165,9 @@ function TimelineReadingCard ({
             </p>
           </div>
 
-          {/* 뒷면 — 원래 타임라인 카드 UI (이름·키워드·포지션 리딩) */}
+          {/* 뒷면 — 상단 고정 / 보더 아래 리딩만 스크롤 */}
           <div
-            className='absolute inset-0 flex min-w-0 flex-1 flex-col items-center overflow-y-auto rounded-2xl border px-2 py-4 sm:px-3 sm:py-5'
+            className='absolute inset-0 flex flex-col items-center overflow-hidden rounded-2xl border px-2 py-3 sm:px-3 sm:py-4'
             style={{
               ...boxStyle,
               backfaceVisibility: 'hidden',
@@ -200,66 +176,75 @@ function TimelineReadingCard ({
             }}
           >
             <span
-              className='mb-3 text-[8px] font-medium uppercase tracking-[0.32em] sm:text-[9px] sm:tracking-[0.38em]'
+              className='mb-2 shrink-0 text-[8px] font-medium uppercase tracking-[0.32em] sm:text-[9px] sm:tracking-[0.38em]'
               style={{ color: mysticTheme.gold }}
             >
               {label}
             </span>
 
-            <h3
-              className='mt-0 line-clamp-2 text-center font-serif text-xs leading-snug sm:text-sm'
-              style={{ color: isMajor ? mysticTheme.gold : mysticTheme.offWhite }}
-            >
-              {card.name}
-            </h3>
+            <TimelineLogoPlaceholder logoIdPrefix={`timeline-flip-${index}`} />
 
-            {isMajor && (
-              <span
-                className='mt-1 rounded-full border px-1.5 py-px text-[7px] uppercase tracking-[0.15em] sm:text-[8px]'
-                style={{ borderColor: mysticTheme.goldDim, color: mysticTheme.gold }}
+            {/* 이름·Major·키워드 — 전체 높이 고정으로 보더 라인 통일 */}
+            <div className='mt-1 flex h-[4.125rem] w-full shrink-0 flex-col items-center sm:h-[4.25rem]'>
+              <h3
+                className='line-clamp-2 h-[1.875rem] shrink-0 text-center font-serif text-xs leading-snug sm:h-8 sm:text-sm'
+                style={{ color: isMajor ? mysticTheme.gold : mysticTheme.offWhite }}
               >
-                ✦ Major
-              </span>
-            )}
+                {card.name}
+              </h3>
 
-            <div className='mt-2 flex min-h-[24px] w-full flex-wrap justify-center gap-1 px-0.5'>
-              {card.keywords.slice(0, 3).map(kw => (
-                <span
-                  key={kw}
-                  className='rounded-full border px-1.5 py-px text-[7px] capitalize sm:px-2 sm:text-[8px]'
-                  style={{
-                    borderColor: 'rgba(255,255,255,0.12)',
-                    color: mysticTheme.offWhiteMuted,
-                    background: 'rgba(255,255,255,0.04)'
-                  }}
-                >
-                  {kw}
-                </span>
-              ))}
+              <div className='-mt-0.5 flex h-2.5 w-full shrink-0 items-center justify-center'>
+                {isMajor && (
+                  <span
+                    className='rounded-full border px-1.5 py-px text-[7px] uppercase leading-none tracking-[0.15em] sm:text-[8px]'
+                    style={{ borderColor: mysticTheme.goldDim, color: mysticTheme.gold }}
+                  >
+                    ✦ Major
+                  </span>
+                )}
+              </div>
+
+              <div className='mt-0.5 flex h-6 w-full shrink-0 flex-wrap items-center justify-center gap-1 overflow-hidden px-0.5'>
+                {card.keywords.slice(0, 3).map(kw => (
+                  <span
+                    key={kw}
+                    className='rounded-full border px-1.5 py-px text-[7px] capitalize sm:px-2 sm:text-[8px]'
+                    style={{
+                      borderColor: 'rgba(255,255,255,0.12)',
+                      color: mysticTheme.offWhiteMuted,
+                      background: 'rgba(255,255,255,0.04)'
+                    }}
+                  >
+                    {kw}
+                  </span>
+                ))}
+              </div>
             </div>
 
             <div
-              className='mt-3 w-full flex-1 border-t pt-3 sm:mt-4 sm:pt-4'
+              className='mt-2 flex min-h-0 w-full flex-1 flex-col overflow-hidden border-t pt-2'
               style={{ borderColor: 'rgba(255,255,255,0.08)' }}
             >
               <p
-                className='mb-1.5 text-center text-[8px] uppercase tracking-[0.22em] sm:text-[9px]'
+                className='mb-1 shrink-0 text-center text-[8px] uppercase tracking-[0.22em] sm:text-[9px]'
                 style={{ color: mysticTheme.offWhiteMuted }}
               >
                 Your reader
               </p>
-              <motion.p
-                initial={false}
-                animate={
-                  isFlipped ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }
-                }
-                transition={{ duration: 0.45, ease: mysticEase }}
-                className='text-center font-serif text-[11px] leading-relaxed sm:text-xs sm:leading-[1.7]'
-                style={{ color: mysticTheme.offWhite }}
-              >
-                {interpretation ||
-                  'The cards hold their counsel — your reader will speak when the path is clear.'}
-              </motion.p>
+              <div className='min-h-0 flex-1 overflow-y-auto overscroll-contain'>
+                <motion.p
+                  initial={false}
+                  animate={
+                    isFlipped ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }
+                  }
+                  transition={{ duration: 0.45, ease: mysticEase }}
+                  className='px-0.5 pb-1 text-center font-serif text-[11px] leading-relaxed sm:text-xs sm:leading-[1.7]'
+                  style={{ color: mysticTheme.offWhite }}
+                >
+                  {interpretation ||
+                    'The cards hold their counsel — your reader will speak when the path is clear.'}
+                </motion.p>
+              </div>
             </div>
           </div>
         </motion.div>
@@ -271,11 +256,13 @@ function TimelineReadingCard ({
 function MessageReadingCard ({
   body,
   delay,
-  readingUnlocked
+  readingUnlocked,
+  articleRef
 }: {
   body: string
   delay: number
   readingUnlocked: boolean
+  articleRef?: RefObject<HTMLElement | null>
 }) {
   if (!body.trim()) return null
 
@@ -283,15 +270,20 @@ function MessageReadingCard ({
     <AnimatePresence>
       {readingUnlocked && (
         <motion.article
+          ref={articleRef}
+          tabIndex={-1}
+          role='region'
+          aria-label='Reading message'
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.55, ease: mysticEase, delay }}
-          className='w-full rounded-2xl border p-4 text-center sm:p-5'
+          className='w-full rounded-2xl border p-4 text-center outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-black sm:p-5'
           style={{
             borderColor: mysticTheme.goldDim,
             background: `linear-gradient(145deg, ${mysticTheme.navyMid}, ${mysticTheme.charcoal})`,
-            boxShadow: `0 0 24px ${mysticTheme.goldGlow}`
+            boxShadow: `0 0 24px ${mysticTheme.goldGlow}`,
+            outlineColor: mysticTheme.goldDim
           }}
         >
           <span
@@ -348,6 +340,7 @@ export function TarotResult ({
   const [revealedSlots, setRevealedSlots] = useState<Set<number>>(() => new Set())
 
   const readingUnlocked = revealedSlots.size >= 3
+  const messageCardRef = useRef<HTMLElement>(null)
 
   const handleFlip = useCallback((index: number) => {
     setFlipStates(prev => {
@@ -370,6 +363,18 @@ export function TarotResult ({
   }, [])
 
   const messageBody = findSectionBody(allSections, 'Message')
+
+  useEffect(() => {
+    if (!readingUnlocked) return
+    const t = setTimeout(() => {
+      messageCardRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      })
+      messageCardRef.current?.focus({ preventScroll: true })
+    }, MESSAGE_FOCUS_DELAY_MS)
+    return () => clearTimeout(t)
+  }, [readingUnlocked])
 
   useEffect(() => {
     setPremium(isPremium)
@@ -443,19 +448,25 @@ export function TarotResult ({
           body={messageBody}
           delay={0.35}
           readingUnlocked={readingUnlocked}
+          articleRef={messageCardRef}
         />
 
         {readingUnlocked &&
           allSections.length === 1 &&
           allSections[0]?.id === 'reading' && (
             <motion.article
+              ref={!messageBody.trim() ? messageCardRef : undefined}
+              tabIndex={-1}
+              role='region'
+              aria-label='Reading'
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, ease: mysticEase, delay: 0.2 }}
-              className='rounded-2xl border p-4 sm:p-5'
+              className='rounded-2xl border p-4 outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-black sm:p-5'
               style={{
                 borderColor: 'rgba(255,255,255,0.1)',
-                background: mysticTheme.glass
+                background: mysticTheme.glass,
+                outlineColor: mysticTheme.goldDim
               }}
             >
               <p
@@ -468,19 +479,21 @@ export function TarotResult ({
           )}
       </div>
 
-      {easternTeaser && (
-        <EasternTeaserBlock
-          sessionId={sessionId}
-          easternTeaser={easternTeaser}
-          isPremium={premium}
-          premiumReading={premiumText}
-          onUnlocked={text => {
-            setPremium(true)
-            setPremiumText(text)
-            onPremiumUnlocked?.(text)
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {easternTeaser && readingUnlocked && (
+          <EasternTeaserBlock
+            sessionId={sessionId}
+            easternTeaser={easternTeaser}
+            isPremium={premium}
+            premiumReading={premiumText}
+            onUnlocked={text => {
+              setPremium(true)
+              setPremiumText(text)
+              onPremiumUnlocked?.(text)
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       <motion.div
         initial={{ opacity: 0, y: 16 }}

@@ -1,6 +1,18 @@
 "use client";
 
-export function SacredGeometryLogo({ className = "", hideGlow = false }: { className?: string; hideGlow?: boolean }) {
+export function SacredGeometryLogo({
+  className = "",
+  hideGlow = false,
+  idPrefix = "sg",
+}: {
+  className?: string;
+  hideGlow?: boolean;
+  /** SVG filter/gradient id 충돌 방지 (카드 3장 등 복수 인스턴스) */
+  idPrefix?: string;
+}) {
+  const glowId = `${idPrefix}-glow`;
+  const gradientId = `${idPrefix}-cosmicGradient`;
+
   return (
     <div className={`relative ${className}`}>
       {/* Outer glow effect */}
@@ -15,14 +27,14 @@ export function SacredGeometryLogo({ className = "", hideGlow = false }: { class
       >
         {/* Glow filters */}
         <defs>
-          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+          <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
             <feMerge>
               <feMergeNode in="coloredBlur"/>
               <feMergeNode in="SourceGraphic"/>
             </feMerge>
           </filter>
-          <linearGradient id="cosmicGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="oklch(0.8 0.18 190)" />
             <stop offset="50%" stopColor="oklch(0.75 0.15 280)" />
             <stop offset="100%" stopColor="oklch(0.75 0.2 330)" />
@@ -34,9 +46,9 @@ export function SacredGeometryLogo({ className = "", hideGlow = false }: { class
           cx="100" 
           cy="100" 
           r="90" 
-          stroke="url(#cosmicGradient)" 
+          stroke={`url(#${gradientId})`}
           strokeWidth="1.5" 
-          filter="url(#glow)"
+          filter={`url(#${glowId})`}
           className="opacity-60"
         />
         
@@ -45,9 +57,9 @@ export function SacredGeometryLogo({ className = "", hideGlow = false }: { class
           cx="100" 
           cy="100" 
           r="70" 
-          stroke="url(#cosmicGradient)" 
+          stroke={`url(#${gradientId})`} 
           strokeWidth="1" 
-          filter="url(#glow)"
+          filter={`url(#${glowId})`}
           className="opacity-50"
         />
         
@@ -56,29 +68,29 @@ export function SacredGeometryLogo({ className = "", hideGlow = false }: { class
           cx="100" 
           cy="100" 
           r="50" 
-          stroke="url(#cosmicGradient)" 
+          stroke={`url(#${gradientId})`} 
           strokeWidth="1" 
-          filter="url(#glow)"
+          filter={`url(#${glowId})`}
           className="opacity-40"
         />
         
         {/* Sacred triangle pointing up */}
         <path 
           d="M100 30 L165 130 L35 130 Z" 
-          stroke="url(#cosmicGradient)" 
+          stroke={`url(#${gradientId})`} 
           strokeWidth="1.5" 
           fill="none"
-          filter="url(#glow)"
+          filter={`url(#${glowId})`}
           className="opacity-70"
         />
         
         {/* Sacred triangle pointing down */}
         <path 
           d="M100 170 L35 70 L165 70 Z" 
-          stroke="url(#cosmicGradient)" 
+          stroke={`url(#${gradientId})`} 
           strokeWidth="1.5" 
           fill="none"
-          filter="url(#glow)"
+          filter={`url(#${glowId})`}
           className="opacity-70"
         />
         
@@ -88,10 +100,10 @@ export function SacredGeometryLogo({ className = "", hideGlow = false }: { class
           cy="100" 
           rx="25" 
           ry="15" 
-          stroke="url(#cosmicGradient)" 
+          stroke={`url(#${gradientId})`} 
           strokeWidth="1.5"
           fill="none"
-          filter="url(#glow)"
+          filter={`url(#${glowId})`}
           className="opacity-80"
         />
         
@@ -100,8 +112,8 @@ export function SacredGeometryLogo({ className = "", hideGlow = false }: { class
           cx="100" 
           cy="100" 
           r="8" 
-          fill="url(#cosmicGradient)"
-          filter="url(#glow)"
+          fill={`url(#${gradientId})`}
+          filter={`url(#${glowId})`}
           className="opacity-90"
         />
         
@@ -113,9 +125,9 @@ export function SacredGeometryLogo({ className = "", hideGlow = false }: { class
             y1="10"
             x2="100"
             y2="30"
-            stroke="url(#cosmicGradient)"
+            stroke={`url(#${gradientId})`}
             strokeWidth="1"
-            filter="url(#glow)"
+            filter={`url(#${glowId})`}
             className="opacity-40"
             transform={`rotate(${angle} 100 100)`}
           />
@@ -124,20 +136,20 @@ export function SacredGeometryLogo({ className = "", hideGlow = false }: { class
         {/* Moon crescent left */}
         <path 
           d="M40 100 A30 30 0 0 1 40 70 A25 25 0 0 0 40 100" 
-          stroke="url(#cosmicGradient)" 
+          stroke={`url(#${gradientId})`} 
           strokeWidth="1"
           fill="none"
-          filter="url(#glow)"
+          filter={`url(#${glowId})`}
           className="opacity-50"
         />
         
         {/* Moon crescent right */}
         <path 
           d="M160 100 A30 30 0 0 0 160 70 A25 25 0 0 1 160 100" 
-          stroke="url(#cosmicGradient)" 
+          stroke={`url(#${gradientId})`} 
           strokeWidth="1"
           fill="none"
-          filter="url(#glow)"
+          filter={`url(#${glowId})`}
           className="opacity-50"
         />
       </svg>

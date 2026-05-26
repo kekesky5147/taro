@@ -13,9 +13,9 @@ import {
   boolean,
   jsonb,
   timestamp,
-} from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
-import { tarotCards } from "./cards";
+} from "drizzle-orm/pg-core"
+import { relations } from "drizzle-orm"
+import { tarotCards } from "./cards"
 
 export const readingSessions = pgTable("reading_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -69,7 +69,7 @@ export const readingSessions = pgTable("reading_sessions", {
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+})
 
 export const sessionCards = pgTable("session_cards", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
@@ -99,7 +99,7 @@ export const sessionCards = pgTable("session_cards", {
   positionReading: text("position_reading"),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+})
 
 /* ── Relations ─────────────────────────────────────────── */
 
@@ -108,7 +108,7 @@ export const readingSessionsRelations = relations(
   ({ many }) => ({
     cards: many(sessionCards),
   }),
-);
+)
 
 export const sessionCardsRelations = relations(sessionCards, ({ one }) => ({
   session: one(readingSessions, {
@@ -119,9 +119,9 @@ export const sessionCardsRelations = relations(sessionCards, ({ one }) => ({
     fields: [sessionCards.cardId],
     references: [tarotCards.id],
   }),
-}));
+}))
 
-export type ReadingSession = typeof readingSessions.$inferSelect;
-export type NewReadingSession = typeof readingSessions.$inferInsert;
-export type SessionCard = typeof sessionCards.$inferSelect;
-export type NewSessionCard = typeof sessionCards.$inferInsert;
+export type ReadingSession = typeof readingSessions.$inferSelect
+export type NewReadingSession = typeof readingSessions.$inferInsert
+export type SessionCard = typeof sessionCards.$inferSelect
+export type NewSessionCard = typeof sessionCards.$inferInsert

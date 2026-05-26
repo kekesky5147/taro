@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Lock } from "lucide-react";
 import { createPaymentIntent, unlockPremiumDev } from "@/actions/premium";
+import { shouldSkipPaymentInDev } from "@/lib/payment-mode";
 import { PremiumPaymentModal } from "@/components/premium/premium-payment-modal";
 import { SagePerspectivePanel } from "@/components/mystic-path/sage-perspective-panel";
 import { mysticEase, mysticTheme } from "./mystic-theme";
@@ -53,7 +54,7 @@ export function EasternTeaserBlock({
     setLoading(true);
 
     try {
-      if (process.env.NODE_ENV === "development") {
+      if (shouldSkipPaymentInDev()) {
         const result = await unlockPremiumDev(sessionId);
         if (!result.success) {
           setError(result.error);
