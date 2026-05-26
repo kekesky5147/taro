@@ -17,58 +17,14 @@ import { cinematicEase, easternTheme } from "./premium-eastern-theme";
 
 type CheckoutPhase = "idle" | "paying" | "generating";
 
-/** 모바일 키보드 대응 — tabs + 최소 세로 높이 (이메일·영수증 필드 유지) */
+/** Stripe 기본 appearance (슬림 커스텀 제거) */
 const stripeAppearance: Appearance = {
   theme: "night",
   variables: {
     colorPrimary: easternTheme.gold,
     colorBackground: easternTheme.ink,
     colorText: easternTheme.offWhite,
-    colorTextSecondary: easternTheme.offWhiteMuted,
-    borderRadius: "6px",
-    fontSizeBase: "15px",
-    fontSizeSm: "12px",
-    fontSizeXs: "11px",
-    spacingUnit: "2px",
-    gridColumnSpacing: "6px",
-    gridRowSpacing: "4px",
-    tabSpacing: "2px",
-    fontLineHeight: "1.25",
-  },
-  rules: {
-    ".Input": {
-      padding: "6px 8px",
-      boxShadow: "none",
-      fontSize: "15px",
-      lineHeight: "1.25",
-    },
-    ".Label": {
-      marginBottom: "1px",
-      fontSize: "11px",
-      lineHeight: "1.2",
-    },
-    ".Block": {
-      padding: "4px 6px",
-    },
-    ".Tab": {
-      padding: "4px 6px",
-    },
-    ".TabLabel": {
-      fontSize: "11px",
-      lineHeight: "1.2",
-    },
-    ".TabIcon": {
-      width: "1.1rem",
-    },
-    ".Error": {
-      fontSize: "11px",
-      marginTop: "2px",
-      lineHeight: "1.25",
-    },
-    ".Text": {
-      fontSize: "11px",
-      lineHeight: "1.25",
-    },
+    borderRadius: "12px",
   },
 };
 
@@ -130,6 +86,14 @@ function CheckoutForm({
       const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
         elements,
         redirect: "if_required",
+        confirmParams: {
+          payment_method_data: {
+            billing_details: {
+              /** name: never 일 때 Stripe가 confirm 시 name 요구 */
+              name: "Mystic Synchronicity",
+            },
+          },
+        },
       });
 
       if (confirmError) {
@@ -180,8 +144,17 @@ function CheckoutForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-2 sm:gap-3">
-      <PaymentElement options={paymentElementOptions} />
+    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-4">
+      <div
+        className="w-full max-h-[280px] overflow-y-auto overscroll-contain rounded-lg sm:max-h-none sm:overflow-visible"
+        style={{
+          WebkitOverflowScrolling: "touch",
+          touchAction: "pan-y",
+        }}
+        aria-label="Payment form"
+      >
+        <PaymentElement options={paymentElementOptions} />
+      </div>
       {error && (
         <p className="text-center text-xs" style={{ color: "oklch(0.65 0.12 25 / 0.9)" }}>
           {error}
