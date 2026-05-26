@@ -45,6 +45,11 @@ const PREMIUM_MAX_OUTPUT_TOKENS = 4096;
 const GROQ_RETRY_ATTEMPTS = 3;
 const GROQ_RETRY_BASE_MS = 900;
 
+function containsHangul(text: string | null | undefined): boolean {
+  if (!text) return false;
+  return /[\uAC00-\uD7A3]/.test(text);
+}
+
 function getGroqClient(): OpenAI {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
@@ -333,6 +338,10 @@ export async function generateTarotReading(
       session.aiReading &&
       isCompleteStandardReading(session.aiReading, session.easternTeaser)
     ) {
+      // 강제 영어 모드: DB에 남아있는 한글 섞인 리딩은 무효 처리하고 재생성
+      if (containsHangul(session.aiReading) || containsHangul(session.easternTeaser)) {
+        // fall through to regeneration
+      } else {
       return {
         success: true,
         data: {
@@ -341,6 +350,7 @@ export async function generateTarotReading(
           easternTeaser: session.easternTeaser ?? null,
         },
       };
+      }
     }
 
     // 4. 카드 3장 선택 여부 확인
@@ -392,9 +402,9 @@ export async function generateTarotReading(
       })),
     );
 
-    let reading: string;
-    let easternTeaser: string | null;
-    let source: ReadingResolveSource;
+    let reading: string | undefined;
+    let easternTeaser: string | null | undefined;
+    let source: ReadingResolveSource | undefined;
 
     const resolved = await resolveCachedOrMockReading(cacheKey);
     if (
@@ -404,9 +414,18 @@ export async function generateTarotReading(
         resolved.payload.easternTeaser,
       )
     ) {
-      ({ reading, easternTeaser } = resolved.payload);
-      source = resolved.source;
-    } else {
+      // 강제 영어 모드: 한글 섞인 캐시는 무효
+      if (
+        containsHangul(resolved.payload.reading) ||
+        containsHangul(resolved.payload.easternTeaser)
+      ) {
+        // ignore cache
+      } else {
+        ({ reading, easternTeaser } = resolved.payload);
+        source = resolved.source;
+      }
+    }
+    if (!source) {
       const language = FORCED_READING_LANGUAGE;
 
       const userPrompt = `IMPORTANT: Write your ENTIRE response in ${language} only. Do not mix languages.
@@ -432,11 +451,14 @@ Write the full output: ### Past / ### Present / ### Future / ### Message / ### S
       console.info(`[generateTarotReading] source=${source} cacheKey=${cacheKey}`);
     }
 
-    await persistReadingToSession(sessionId, { reading, easternTeaser });
+    if (!reading) {
+      throw new Error("Failed to produce reading.");
+    }
+    await persistReadingToSession(sessionId, { reading, easternTeaser: easternTeaser ?? null });
 
     return {
       success: true,
-      data: { reading, sessionId, easternTeaser },
+      data: { reading, sessionId, easternTeaser: easternTeaser ?? null },
     };
   } catch (err) {
     console.error("[generateTarotReading] Error:", err);
@@ -591,10 +613,15 @@ export async function generatePremiumReading(
     }
 
     if (session.premiumReading) {
+      // 강제 영어 모드: DB에 남아있는 한글 섞인 프리미엄 리딩은 무효 처리하고 재생성
+      if (containsHangul(session.premiumReading)) {
+        // fall through
+      } else {
       return {
         success: true,
         data: { premiumReading: session.premiumReading },
       };
+      }
     }
 
     if (session.cards.length < 3) {
@@ -641,9 +668,11 @@ export async function generatePremiumReading(
       ? `\nThe Sage may also reference the seeker's zodiac sign (${session.zodiacSign}) where it enriches the five-element reading.`
       : "";
 
-    const standardReading = session.aiReading
-      ? `\nStandard reading (summary — extend, do not contradict):\n${session.aiReading.slice(0, 1200)}\n\nBuild The Sage's Perspective as a deeper layer on this foundation.`
-      : "";
+    // 표준 리딩에 한글이 섞여 있으면 프리미엄 프롬프트에 넣지 않음 (언어 오염 방지)
+    const standardReading =
+      session.aiReading && !containsHangul(session.aiReading)
+        ? `\nStandard reading (summary — extend, do not contradict):\n${session.aiReading.slice(0, 1200)}\n\nBuild The Sage's Perspective as a deeper layer on this foundation.`
+        : "";
 
     const cacheKey = buildCardComboCacheKey(
       orderedCards.map((sc) => ({
@@ -653,14 +682,19 @@ export async function generatePremiumReading(
       })),
     );
 
-    let premiumReading: string;
-    let source: ReadingResolveSource;
+    let premiumReading: string | undefined;
+    let source: ReadingResolveSource | undefined;
 
     const resolved = await resolveCachedOrMockPremiumReading(cacheKey);
     if (resolved && isCompletePremiumReading(resolved.payload.premiumReading)) {
-      premiumReading = resolved.payload.premiumReading;
-      source = resolved.source;
-    } else {
+      if (containsHangul(resolved.payload.premiumReading)) {
+        // ignore cache
+      } else {
+        premiumReading = resolved.payload.premiumReading;
+        source = resolved.source;
+      }
+    }
+    if (!premiumReading) {
       const userPrompt = `IMPORTANT: Write your ENTIRE response in ${language} only.
 ABSOLUTE: Do not output ANY non-English words or non-Latin scripts (e.g. Korean/Hangul, Japanese, Chinese, Cyrillic, Arabic). Not even a single character.
 If you accidentally include any non-English text, rewrite the entire response in English only before answering.
@@ -692,6 +726,10 @@ Provide "The Sage's Perspective" — a long, saju-style narrative reading (tarot
 
     if (isDevelopmentReadingMode()) {
       console.info(`[generatePremiumReading] source=${source} cacheKey=${cacheKey}`);
+    }
+
+    if (!premiumReading) {
+      throw new Error("Failed to produce premium reading.");
     }
 
     await db
